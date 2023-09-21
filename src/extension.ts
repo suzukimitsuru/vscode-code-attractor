@@ -8,18 +8,18 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "code-attractor" is now active!');
+	console.log('Congratulations, your extension "vscode-code-attractor" is now active!');
 	
 
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('code-attractor.helloWorld', () => {
+	let disposable = vscode.commands.registerCommand('codeattractor.helloWorld', () => {
 		// The code you place here will be executed every time your command is executed
 		// Display a message box to the user
 		let attractor = vscode.window.createWebviewPanel("html","Attractor", vscode.ViewColumn.One);
 		attractor.webview.html = 'Html Text';
-		//vscode.window.showInformationMessage('Hello World from code-attractor!');
+		//vscode.window.showInformationMessage('Hello World from vscode-code-attractor!');
 		vscode.window.setStatusBarMessage('message', 3000);
 	});
 

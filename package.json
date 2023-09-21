@@ -1,26 +1,51 @@
 {
-  "name": "code-attractor",
-  "displayName": "code-attractor",
-  "description": "Visualizing code attracting force.",
+  "name": "vscode-code-attractor",
+  "displayName": "code attractor",
+  "description": "Visualizing code with attracting force.",
   "version": "0.0.1",
+  "preview": true,
+	"publisher": "suzukimitsuru",
   "engines": {
     "vscode": "^1.81.0"
   },
   "categories": [
     "Visualization"
   ],
-  "activationEvents": [],
+  "activationEvents": [ "*" ],
+	"repository": {
+		"url": "https://github.com/suzukimitsuru/vscode-code-attractor"
+	},
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "code-attractor.helloWorld",
+        "command": "codeattractor.helloWorld",
         "title": "Hello World",
         "shortTitle": "hello",
         "category": "catgory",
         "enablement": "true"
       }
-    ]
+    ],
+    "viewsContainers": {
+			"activitybar": [
+				{
+					"id": "codeattractor-explorer",
+					"title": "Code Attractor",
+          "activity":"",
+					"icon": "media/codeattractor-activity.svg",
+          "command": "codeattractor.helloWorld"
+				}
+			]
+		},
+		"views": {
+			"codeattractor-explorer": [
+				{
+					"id": "codeattractor.views.main",
+					"name": "Code Attractor",
+          "type": "tree"
+				}
+			]
+		}
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
