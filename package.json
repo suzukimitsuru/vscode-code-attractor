@@ -11,7 +11,7 @@
   "categories": [
     "Visualization"
   ],
-  "activationEvents": [ "*" ],
+  "activationEvents": [],
 	"repository": {
 		"url": "https://github.com/suzukimitsuru/vscode-code-attractor"
 	},
@@ -19,30 +19,20 @@
   "contributes": {
     "commands": [
       {
-        "command": "codeattractor.helloWorld",
-        "title": "Hello World",
-        "shortTitle": "hello",
-        "category": "catgory",
+        "command": "codeattractor.showEditor",
+        "title": "Show Editor",
+        "shortTitle": "show",
+        "category": "Code Attractor",
         "enablement": "true"
       }
     ],
-    "viewsContainers": {
-			"activitybar": [
-				{
-					"id": "codeattractor-explorer",
-					"title": "Code Attractor",
-          "activity":"",
-					"icon": "media/codeattractor-activity.svg",
-          "command": "codeattractor.helloWorld"
-				}
-			]
-		},
 		"views": {
-			"codeattractor-explorer": [
+			"explorer": [
 				{
-					"id": "codeattractor.views.main",
+					"id": "codeattractor.views.sidebar",
 					"name": "Code Attractor",
-          "type": "tree"
+          "type": "webview",
+          "icon": "media/codeattractor-activity.svg"
 				}
 			]
 		}
