@@ -27,6 +27,14 @@
         "enablement": "true"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codeattractor.showEditor",
+          "group": "navigation"
+        }
+      ]
+    },
 		"views": {
 			"explorer": [
 				{
