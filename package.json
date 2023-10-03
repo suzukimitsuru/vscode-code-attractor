@@ -23,6 +23,7 @@
         "title": "Show Editor",
         "shortTitle": "show",
         "category": "Code Attractor",
+        "icon": "media/codeattractor-icon.svg",
         "enablement": "true"
       }
     ],
@@ -32,10 +33,10 @@
 					"id": "codeattractor.views.sidebar",
 					"name": "Code Attractor",
           "type": "webview",
-          "icon": "media/codeattractor-activity.svg"
+          "icon": "media/codeattractor-icon.svg"
 				}
 			]
-		}
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

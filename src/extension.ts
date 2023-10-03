@@ -20,22 +20,23 @@ export function activate(context: vscode.ExtensionContext) {
 			attractor = vscode.window.createWebviewPanel("html","Code Attractor", 
 				{viewColumn: vscode.ViewColumn.One, preserveFocus: true});
 			attractor.onDidDispose(async () => { attractor = null; });
+			attractor.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'codeattractor-icon.svg');
 			const nonce ='';
 			const scriptUri = attractor.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'main.js'));
 			const styleVSCodeUri = attractor.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'vscode.css'));
-			const iconUrl = attractor.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'media', 'codeattractor-activity.svg'));
+			const iconUrl = attractor.webview.asWebviewUri(attractor.iconPath);
 			//iconUrl.scheme = 'vscode-resource';
 			attractor.webview.html = `<!DOCTYPE html>
 			<html lang="jp">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${attractor.webview.cspSource}; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${attractor.webview.cspSource}; script-src 'nonce-${nonce}'; img-src ${attractor.webview.cspSource} data: https:; ">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleVSCodeUri}" rel="stylesheet">
 				<title>Code Attractor: Editor</title>
 			</head>
 			<body>
-				<img src="codeattractor-activity.svg" alt="Code Attructor icon" />
+				<img src="${iconUrl}" alt="Code Attructor icon" />
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
@@ -76,18 +77,20 @@ class SidebarViewProvider implements vscode.WebviewViewProvider {
 	private _getHtmlForWebview(webview: vscode.Webview) {
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
 		const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'vscode.css'));
+		const iconUrl = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'codeattractor-icon.svg'));
 		const nonce = getNonce();
 		return `<!DOCTYPE html>
 			<html lang="jp">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: https:; ">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${styleVSCodeUri}" rel="stylesheet">
 				<title>Code Attractor: Sidebar</title>
 			</head>
 			<body>
-				<button class="show-editor">表示</button>
+			<img src="${iconUrl}" alt="Code Attructor icon">
+			<button class="show-editor">表示</button>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
