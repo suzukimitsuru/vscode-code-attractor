@@ -1,22 +1,33 @@
 # vscode-code-attractor README
 
-ソースコードの依存を引力で表現します。
-This is the README for your extension "vscode-code-attractor". After writing up a brief description, we recommend including the following sections.
+ソースコードの関係を引力図にして、システム全体を把握できると...イイな♪
+
+## Features
+
+- ディレクトリ・ファイル・名前空間でグループ分けして、依存を線で現わす。
+  - 階層構造を飛ばした依存を発見できる。
+- 依存関係の数を、引力として近く現わす。
+  - 凝集度の関係を一覧できる。
+- 行数を大きさとして、大きく現わす。
+  - 行数が多すぎる複雑なモジュールを発見し易い。
+
+## Rordmap
+
+- 1.Visual Studio Code の拡張機能として動作させる。
+  - 1-1.Code Attructor サイドバー を エクスプローラ サイドバー に表示する。
+  - 1-2.Code Attructor エディタ を Webview で表示する。
+  - 1-3.Code Attructor エディタ の Webview と連携する。 <- **今ココ！**
+- 2.Typesctipt の依存関係を Code Attructor エディタ に表示する。
+  - 2-1.Typesctipt のファイル木を表示する。
+  - 2-2.Typesctipt のモジュール木を表示する。
+  - 2-3.Typesctipt の関連を図にする。
+  - 2-4.Typesctipt の関連を引力図にする。
+- 3.他の言語に対応する。
 
 ## [開発者のための12の最高のコード視覚化](https://hashdork.com/ja/greatest-code-visualization-tools-for-developers/)
 
 - [Sourcetrail](https://): 関係を視覚化
 - [Embold](https://): 欠陥発見
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
 
 ## Requirements
 
