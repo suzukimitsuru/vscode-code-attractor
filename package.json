@@ -11,7 +11,7 @@
   "categories": [
     "Visualization"
   ],
-  "activationEvents": [],
+  "activationEvents": [ "*" ],
 	"repository": {
 		"url": "https://github.com/suzukimitsuru/vscode-code-attractor"
 	},
