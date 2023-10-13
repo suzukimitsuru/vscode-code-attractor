@@ -2,6 +2,7 @@
  * Code Attractor extension for Visual Studio Code
  */
 import * as vscode from 'vscode';
+import * as lsp_client from 'vscode-languageclient';
 
 /**
  * Extention activater
@@ -14,6 +15,8 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.window.registerWebviewViewProvider(SidebarViewProvider.viewType, provider));
 	
 	// コマンドの登録
+	const _package = vscode.extensions.getExtension('suzukimitsuru.code-attractor')?.packageJSON;
+	const _lsp = lsp_client.ReferencesRequest.method;
 	let disposable = vscode.commands.registerCommand('codeattractor.showEditor', () => {
 		const icon_path = vscode.Uri.joinPath(context.extensionUri, 'media', 'codeattractor-icon.svg');
 		AttractorEditor.createOrShow(context.extensionUri, icon_path);
@@ -26,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
 Sidebar webview provider
  */
 class SidebarViewProvider implements vscode.WebviewViewProvider {
-public static readonly viewType = 'codeattractor.views.sidebar';
+public static readonly viewType = 'codeattractor.sidebar';
 	private _view?: vscode.WebviewView;
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -69,7 +72,7 @@ public static readonly viewType = 'codeattractor.views.sidebar';
 			</head>
 			<body>
 			<img src="${iconUrl}" alt="Code Attructor icon">
-			<button class="show-editor">表示</button>
+			<button class="two-button">表示</button>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
@@ -84,16 +87,17 @@ class AttractorEditor {
 	 * Track the currently panel. Only allow a single panel to exist at a time.
 	 */
 	public static currentPanel: AttractorEditor | undefined;
-	public static readonly viewType = 'codeattractor.views.editor';
+	public static readonly viewType = 'codeattractor.editor';
 
 	private readonly _panel: vscode.WebviewPanel;
 	private readonly _extensionUri: vscode.Uri;
 	private _disposables: vscode.Disposable[] = [];
 	private _counter: number = 0;
+	private _selected: string = 'Please select!';
 
 	public static createOrShow(extensionUri: vscode.Uri, iconUri: vscode.Uri) {
 		const column = vscode.window.activeTextEditor
-			? vscode.window.activeTextEditor.viewColumn
+			? Number(vscode.window.activeTextEditor.viewColumn) + 1
 			: undefined;
 
 		// If we already have a panel, show it.
@@ -102,7 +106,7 @@ class AttractorEditor {
 		} else {
 			// Otherwise, create a new panel.
 			const panel = vscode.window.createWebviewPanel(AttractorEditor.viewType, 'Code Attractor', 
-				column || vscode.ViewColumn.One, getWebviewOptions(extensionUri));
+				column || vscode.ViewColumn.Two, getWebviewOptions(extensionUri));
 			panel.iconPath = iconUri;
 			AttractorEditor.currentPanel = new AttractorEditor(panel, extensionUri);
 		}
@@ -136,14 +140,26 @@ class AttractorEditor {
 
 		// Handle messages from the webview
 		this._panel.webview.onDidReceiveMessage(async message => {
-				switch (message.type) {
+				switch (message.command) {
 					case 'addCounter':
 						this._counter += message.value;
-						this._update();
+						this._panel.webview.postMessage({ command: "showCounter",
+							value: this._counter });
 						break;
 				}
 			}, null, this._disposables
 		);
+		vscode.window.onDidChangeTextEditorSelection(async event =>{
+			if (event.selections.length > 0) {
+				const doc = event.textEditor.document;
+				event.selections.forEach(element => {
+					const range = doc.getWordRangeAtPosition(element.start);
+					this._selected = doc.getText(range);
+					this._panel.webview.postMessage({ command: "showWord",
+						value: this._selected });
+				});
+			}
+		});
 	}
 
 	public doRefactor() {
@@ -197,11 +213,14 @@ class AttractorEditor {
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${stylesResetUri}" rel="stylesheet">
 				<link href="${stylesMainUri}" rel="stylesheet">
-				<title>Code Attractor: Sidebar</title>
+				<title>Code Attractor: Editor</title>
 			</head>
 			<body>
-				<button class="show-editor">＋２</button>
-				<li>${this._counter}</li>
+				<button class="two-button">＋２</button>
+				<div id="counter-value">${this._counter}</div>
+				<br/>
+				<label>Selected</label>
+				<div id="selected-word">${this._selected}</div>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;

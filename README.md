@@ -1,15 +1,10 @@
-# vscode-code-attractor README
+# I wish to make a attracting foce diagram of the relationship between chords
 
-ソースコードの関係を引力図にして、システム全体を把握できると...イイな♪
+ソフトウェアの構造は、目に見えません。コードを書いた(設計した)人か、設計を理解した人の頭の中にしかありません。  
+そのため、ソフトウェアを変更する場合、構造が壊れてゆきます。  
+Code Attractor は、コードの関係を引力図にして、様々な視点から見る事で、ソフトウェアの大きさや構造を把握し易くするための Visual Studio Code の拡張機能になる予定です。  
 
-## Features
-
-- ディレクトリ・ファイル・名前空間でグループ分けして、依存を線で現わす。
-  - 階層構造を飛ばした依存を発見できる。
-- 依存関係の数を、引力として近く現わす。
-  - 凝集度の関係を一覧できる。
-- 行数を大きさとして、大きく現わす。
-  - 行数が多すぎる複雑なモジュールを発見し易い。
+## Background
 
 ## Rordmap
 
@@ -24,10 +19,19 @@
   - 2-4.Typesctipt の関連を引力図にする。
 - 3.他の言語に対応する。
 
-## [開発者のための12の最高のコード視覚化](https://hashdork.com/ja/greatest-code-visualization-tools-for-developers/)
+## Future
 
 - [Sourcetrail](https://): 関係を視覚化
 - [Embold](https://): 欠陥発見
+
+## Features
+
+- ディレクトリ・ファイル・名前空間でグループ分けして、依存を線で現わす。
+  - 階層構造を飛び越した依存を発見できる。
+- 依存関係の数を、引力として近く現わす。
+  - 凝集度の関係を一覧できる。
+- 行数を大きさとして、大きく現わす。
+  - 行数が多すぎる複雑なモジュールを発見し易い。
 
 ## Requirements
 
