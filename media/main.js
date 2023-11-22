@@ -1,7 +1,7 @@
 (function () {
     const vscode = acquireVsCodeApi();
     document.querySelector('.two-button').addEventListener('click', () => {
-        vscode.postMessage({ command: 'addCounter', value: 2 });
+        vscode.postMessage({ command: 'countUp', value: 2 });
     });
     window.addEventListener("DOMContentLoaded", () => {
 

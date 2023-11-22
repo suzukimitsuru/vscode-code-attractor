@@ -1,250 +1,52 @@
-/**
- * Code Attractor extension for Visual Studio Code
- */
+/** @file Code Attractor extension for Visual Studio Code */
 import * as vscode from 'vscode';
 import * as lsp_client from 'vscode-languageclient';
+import * as sidebar from './sidebar';
+import * as editor from './editor';
 
 /**
- * Extention activater
+ * @function 拡張機能の有効化イベント
  * @param context extention contexest
  */
 export function activate(context: vscode.ExtensionContext) {
 	console.log('"vscode-code-attractor" is now active!');
+	const packageJson = vscode.extensions.getExtension('suzukimitsuru.code-attractor')?.packageJSON;
+	const lsp = lsp_client.ReferencesRequest.method;
 
-	const provider = new SidebarViewProvider(context.extensionUri);
-	context.subscriptions.push(vscode.window.registerWebviewViewProvider(SidebarViewProvider.viewType, provider));
-	
-	// コマンドの登録
-	const _package = vscode.extensions.getExtension('suzukimitsuru.code-attractor')?.packageJSON;
-	const _lsp = lsp_client.ReferencesRequest.method;
-	let disposable = vscode.commands.registerCommand('codeattractor.showEditor', () => {
-		const icon_path = vscode.Uri.joinPath(context.extensionUri, 'media', 'codeattractor-icon.svg');
-		AttractorEditor.createOrShow(context.extensionUri, icon_path);
-	});
+	// サイドバーの登録
+	const tree = new sidebar.TreeProvider(new sidebar.TreeElement('root'));
+	const sideview = vscode.window.createTreeView('codeattractor.sidebar', {treeDataProvider: tree});
+	context.subscriptions.push(sideview);
 
-	context.subscriptions.push(disposable);
-}
+	// エディタ(コマンド)の登録
+	let _editor: editor.Attractor | null = null;
+	const openEditor = vscode.commands.registerCommand('codeattractor.openEditor', () => {
 
-/**
-Sidebar webview provider
- */
-class SidebarViewProvider implements vscode.WebviewViewProvider {
-public static readonly viewType = 'codeattractor.sidebar';
-	private _view?: vscode.WebviewView;
-	constructor(
-		private readonly _extensionUri: vscode.Uri,
-	) { }
-	public resolveWebviewView(
-		webviewView: vscode.WebviewView,
-		context: vscode.WebviewViewResolveContext,
-		_token: vscode.CancellationToken,
-	) {
-		this._view = webviewView;
-		webviewView.webview.options = {
-			// Allow scripts in the webview
-			enableScripts: true,
-			localResourceRoots: [ this._extensionUri ]
-		};
-		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-		webviewView.webview.onDidReceiveMessage(async data => {
-			switch (data.type) {
-				case 'addCounter': {
-					vscode.commands.executeCommand('codeattractor.showEditor');
-					vscode.window.setStatusBarMessage(data.value, 3000);
-					break;
-				}
-			}
-		});
-	}
-	private _getHtmlForWebview(webview: vscode.Webview) {
-		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js'));
-		const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'vscode.css'));
-		const iconUrl = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'codeattractor-icon.svg'));
-		const nonce = getNonce();
-		return `<!DOCTYPE html>
-			<html lang="jp">
-			<head>
-				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} http: https: blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-				<meta name="viewport" content="width=device-width, initial-scale=1.0">
-				<link href="${styleVSCodeUri}" rel="stylesheet">
-				<title>Code Attractor: Sidebar</title>
-			</head>
-			<body>
-			<img src="${iconUrl}" alt="Code Attructor icon">
-			<button class="two-button">表示</button>
-				<script nonce="${nonce}" src="${scriptUri}"></script>
-			</body>
-			</html>`;
-	}
-}
+		// エディタが在ったら
+		if (_editor) {
 
-/**
-Manages cat coding webview panels
- */
-class AttractorEditor {
-	/**
-	 * Track the currently panel. Only allow a single panel to exist at a time.
-	 */
-	public static currentPanel: AttractorEditor | undefined;
-	public static readonly viewType = 'codeattractor.editor';
-
-	private readonly _panel: vscode.WebviewPanel;
-	private readonly _extensionUri: vscode.Uri;
-	private _disposables: vscode.Disposable[] = [];
-	private _counter: number = 0;
-	private _selected: string = 'Please select!';
-
-	public static createOrShow(extensionUri: vscode.Uri, iconUri: vscode.Uri) {
-		const column = vscode.window.activeTextEditor
-			? Number(vscode.window.activeTextEditor.viewColumn) + 1
-			: undefined;
-
-		// If we already have a panel, show it.
-		if (AttractorEditor.currentPanel) {
-			AttractorEditor.currentPanel._panel.reveal(column);
+			// エディタの表示
+			_editor.reveal();
 		} else {
-			// Otherwise, create a new panel.
-			const panel = vscode.window.createWebviewPanel(AttractorEditor.viewType, 'Code Attractor', 
-				column || vscode.ViewColumn.Two, getWebviewOptions(extensionUri));
-			panel.iconPath = iconUri;
-			AttractorEditor.currentPanel = new AttractorEditor(panel, extensionUri);
+			// エディタの生成
+			const roots = vscode.Uri.joinPath(context.extensionUri, 'media');
+			const column = vscode.window.activeTextEditor
+				? Number(vscode.window.activeTextEditor.viewColumn) + 1
+				: vscode.ViewColumn.Two;
+			const panel = vscode.window.createWebviewPanel('codeattractor.editor', 'Code Attractor', 
+				column, {enableScripts: true, localResourceRoots: [roots] });
+			panel.iconPath = vscode.Uri.joinPath(roots, 'codeattractor-icon.svg');
+			panel.onDidDispose(() => _editor = null);
+			_editor = new editor.Attractor(panel, roots, tree);
 		}
-	}
-
-	public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
-		AttractorEditor.currentPanel = new AttractorEditor(panel, extensionUri);
-	}
-
-	private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
-		this._panel = panel;
-		this._extensionUri = extensionUri;
-
-		// Set the webview's initial html content
-		this._update();
-
-		// Listen for when the panel is disposed
-		// This happens when the user closes the panel or when the panel is closed programmatically
-		this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-
-		// Update the content based on view changes
-		this._panel.onDidChangeViewState(
-			e => {
-				if (this._panel.visible) {
-					this._update();
-				}
-			},
-			null,
-			this._disposables
-		);
-
-		// Handle messages from the webview
-		this._panel.webview.onDidReceiveMessage(async message => {
-				switch (message.command) {
-					case 'addCounter':
-						this._counter += message.value;
-						this._panel.webview.postMessage({ command: "showCounter",
-							value: this._counter });
-						break;
-				}
-			}, null, this._disposables
-		);
-		vscode.window.onDidChangeTextEditorSelection(async event =>{
-			if (event.selections.length > 0) {
-				const doc = event.textEditor.document;
-				event.selections.forEach(element => {
-					const range = doc.getWordRangeAtPosition(element.start);
-					this._selected = doc.getText(range);
-					this._panel.webview.postMessage({ command: "showWord",
-						value: this._selected });
-				});
-			}
-		});
-	}
-
-	public doRefactor() {
-		// Send a message to the webview webview.
-		// You can send any JSON serializable data.
-		this._panel.webview.postMessage({ command: 'refactor' });
-	}
-
-	public dispose() {
-		AttractorEditor.currentPanel = undefined;
-
-		// Clean up our resources
-		this._panel.dispose();
-
-		while (this._disposables.length) {
-			const x = this._disposables.pop();
-			if (x) {
-				x.dispose();
-			}
-		}
-	}
-
-	private _update() {
-		this._panel.title = 'Code Attructor';
-		this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
-	}
-
-	private _getHtmlForWebview(webview: vscode.Webview) {
-		// Local path to main script run in the webview
-		const scriptPathOnDisk = vscode.Uri.joinPath(this._extensionUri, 'media', 'main.js');
-
-		// And the uri we use to load this script in the webview
-		const scriptUri = webview.asWebviewUri(scriptPathOnDisk);
-
-		// Local path to css styles
-		const styleResetPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'reset.css');
-		const stylesPathMainPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'vscode.css');
-
-		// Uri to load styles into webview
-		const stylesResetUri = webview.asWebviewUri(styleResetPath);
-		const stylesMainUri = webview.asWebviewUri(stylesPathMainPath);
-
-		// Use a nonce to only allow specific scripts to be run
-		const nonce = getNonce();
-
-		return `<!DOCTYPE html>
-			<html lang="jp">
-			<head>
-				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} http: https: blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-				<meta name="viewport" content="width=device-width, initial-scale=1.0">
-				<link href="${stylesResetUri}" rel="stylesheet">
-				<link href="${stylesMainUri}" rel="stylesheet">
-				<title>Code Attractor: Editor</title>
-			</head>
-			<body>
-				<button class="two-button">＋２</button>
-				<div id="counter-value">${this._counter}</div>
-				<br/>
-				<label>Selected</label>
-				<div id="selected-word">${this._selected}</div>
-				<script nonce="${nonce}" src="${scriptUri}"></script>
-			</body>
-			</html>`;
-	}
+	});
+	context.subscriptions.push(openEditor);
 }
 
-function getWebviewOptions(extensionUri: vscode.Uri): vscode.WebviewOptions {
-	return {
-		// Enable javascript in the webview
-		enableScripts: true,
-
-		// And restrict the webview to only loading content from our extension's `media` directory.
-		localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')]
-	};
+/**
+ * @function 拡張機能の無効化イベント
+ * @description VSCodeの終了/無効にする/アンインストール/
+ */
+export function deactivate() {
+	console.log('"vscode-code-attractor" is now deactivate!');
 }
-
-function getNonce() {
-	let text = '';
-	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	for (let i = 0; i < 32; i++) {
-		text += possible.charAt(Math.floor(Math.random() * possible.length));
-	}
-	return text;
-}
-
-// This method is called when your extension is deactivated
-export function deactivate() {}
