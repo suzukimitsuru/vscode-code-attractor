@@ -59,12 +59,30 @@ export class Attractor {
 
 		// エディタの選択変更イベント
 		vscode.window.onDidChangeTextEditorSelection(async event =>{
+			const docSymbols = await vscode.commands.executeCommand(
+				'vscode.executeDocumentSymbolProvider',
+				vscode.window.activeTextEditor?.document.uri
+			) as vscode.DocumentSymbol[];
+			const symbolsToFind = [vscode.SymbolKind.Class, vscode.SymbolKind.Function, vscode.SymbolKind.Method, vscode.SymbolKind.Constructor];
+			const filtedSymbols = docSymbols
+				? docSymbols.filter(symbol => symbolsToFind.includes(symbol.kind))
+				: undefined;
+			let words: string[] = [];
+			filtedSymbols?.forEach(element => {
+				// 関数を表示
+				words.push(element.name);
+				tree.root.addChild(new sidebar.TreeElement('function: ' + element.name));
+				tree.refresh();
+			});
+			console.log('languageId: ' + vscode.window.activeTextEditor?.document.languageId??'');
+			//panel.webview.postMessage({ command: "showWord", value: words as any });
+
 			// 選択が有れば
 			if (event.selections.length > 0) {
 				// 全ての選択を
-				const doc = event.textEditor.document;
 				event.selections.forEach(element => {
 					// カーソルがある単語を抽出
+					const doc = event.textEditor.document;
 					const range = doc.getWordRangeAtPosition(element.start);
 					this._selected = doc.getText(range);
 					// 単語を表示
@@ -97,7 +115,7 @@ export class Attractor {
 
 	/** @function HTMLを返す */
 	private _getHtml(webview: vscode.Webview, roots: vscode.Uri): string {
-		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(roots, 'main.js'));
+		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(roots, 'dist', 'bundle.js'));
 		const stylesReset = webview.asWebviewUri(vscode.Uri.joinPath(roots, 'reset.css'));
 		const stylesMain = webview.asWebviewUri(vscode.Uri.joinPath(roots, 'vscode.css'));
 		const nonce = this._getNonce();

@@ -2,7 +2,7 @@
   "name": "code-attractor",
   "displayName": "Code Attractor",
   "description": "I wish to make a attracting foce diagram of the relationship between chords",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "preview": true,
   "publisher": "suzukimitsuru",
   "keywords": [
@@ -65,7 +65,10 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "uninstall": "code --uninstall-extension suzukimitsuru.code-attractor",
+    "media-build": "cd media && webpack --mode=production",
+    "media-start": "cd media && webpack-cli serve --mode development"
   },
   "engines": {
     "vscode": "^1.81.0"
