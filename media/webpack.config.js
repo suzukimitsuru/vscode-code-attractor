@@ -22,6 +22,12 @@ module.exports = {
     }, // webpack-dev-serverの公開フォルダ
     open: true, // サーバー起動時にブラウザを開く
   },
+  // バンドルの最大サイズを 1.5 MiBに拡張 default:249856=244 KiB
+  performance: {
+    maxAssetSize: 1572864,
+    maxEntrypointSize: 1572864,
+    hints: "warning"
+  },
   // モジュールに適用するルールの設定（ローダーの設定を行う事が多い）
   module: {
     rules: [

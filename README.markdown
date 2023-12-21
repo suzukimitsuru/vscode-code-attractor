@@ -1,5 +1,11 @@
 # I wish to make a attracting foce diagram of the relationship between code
 
+[![NPM Package][npm]][npm-url]
+[![Build Size][build-size]][build-size-url]
+[![NPM Downloads][npm-downloads]][npmtrends-url]
+[![DeepScan][deepscan]][deepscan-url]
+[![Discord][discord]][discord-url]
+
 Code Attractor は、ソフトウェアの構造を維持しながら育ててゆくために作りました。  
 関係の強さを引力として表現すれば、ソフトウェアの形が見える様になると考えています。  
 良い設計のソフトウェアは、美しく見える事を期待しています。  
@@ -14,7 +20,7 @@ Visual Studio Code の拡張機能として動作します。
 - 2.呼び出し階層を表示する。
   - Visual Studio Code の呼び出し階層(Call Tree)を取得し表示できないか？
 - 3.引力図を表示する。
-  - 物理エンジンで３次元の引力図を表示する。
+  - 物理エンジンで三次元の引力図を表示する。
 
 ## Features @alpha
 
@@ -24,3 +30,7 @@ Visual Studio Code の拡張機能として動作します。
   - 凝集度の関係を一覧できる。
 - 行数を大きさとして、大きく現わす。
   - 行数が多すぎる複雑なモジュールを発見し易い。
+
+## Bbuild steps
+
+こちらで[このプロジェクトを作った手順](construction-steps.markdown)を説明します。

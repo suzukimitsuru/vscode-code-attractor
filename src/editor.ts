@@ -130,11 +130,17 @@ export class Attractor {
 				<title>Code Attractor: Editor</title>
 			</head>
 			<body>
-				<button class="two-button">＋２</button>
-				<div id="counter-value">${this._counter}</div>
-				<br/>
-				<label>Selected</label>
-				<div id="selected-word">${this._selected}</div>
+				<div>
+					<div>
+						<button class="two-button">＋２</button>
+						<div id="counter-value">${this._counter}</div>
+					</div>
+					<div>
+						<label>Selected</label>
+						<div id="selected-word">${this._selected}</div>
+					</div>
+				</div>
+				<div id="editor-base"><canvas id="editor-canvas" /></div>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;

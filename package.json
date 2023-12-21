@@ -74,9 +74,11 @@
     "vscode": "^1.81.0"
   },
   "devDependencies": {
+    "@types/cannon": "^0.1.12",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.1",
     "@types/node": "20.2.5",
+    "@types/three": "^0.159.0",
     "@types/vscode": "^1.81.0",
     "@types/vscode-webview": "^1.57.3",
     "@typescript-eslint/eslint-plugin": "^5.59.8",
@@ -92,6 +94,8 @@
     "webpack-cli": "^5.1.1"
   },
   "dependencies": {
+    "cannon": "^0.6.2",
+    "three": "^0.159.0",
     "vscode-languageclient": "^9.0.1",
     "xml2js": "^0.6.2"
   }
