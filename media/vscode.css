@@ -92,3 +92,6 @@ textarea::placeholder {
 	width: 100vw;
 	height: 100vh;
 }
+.stored-value {
+	display: none;
+}

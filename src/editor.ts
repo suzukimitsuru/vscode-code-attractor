@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as sidebar from './sidebar';
+import * as SYMBOL from './symbol';
 
 /** @class Code Attractor Editor */
 export class Attractor {
@@ -13,10 +14,9 @@ export class Attractor {
 	//#endregion
 
 	//#region 値
-		/** カウンタ */
-		private _counter: number = 0;
 		/** 選択した単語 */
 		private _selected: string = 'Please select!';
+		private _cametaStore: string  = '';
 	//#endregion
 
 	/** @constructor
@@ -47,35 +47,63 @@ export class Attractor {
 		// メッセージ受信イベント
 		panel.webview.onDidReceiveMessage(async message => {
 			switch (message.command) {
-				case 'countUp':
-					// カウントアップして表示
-					this._counter += message.value;
-					panel.webview.postMessage({ command: "showCounter", value: this._counter });
-					tree.root.addChild(new sidebar.TreeElement('counter: ' + this._counter));
+				case 'redrawRequest':
+					// 再描画
+					panel.webview.postMessage({ command: "drawCanvas" });
+					tree.root.addChild(new sidebar.TreeElement('redraw'));
 					tree.refresh();
+					break;
+					case 'moveCamera':
+						const position = JSON.parse(message.value);
+						this._cametaStore = message.value;
+						break;
+				   case 'operation':
+					console.log('operation: ' + message.value);
 					break;
 			}
 		}, null, this._disposables);
 
 		// エディタの選択変更イベント
-		vscode.window.onDidChangeTextEditorSelection(async event =>{
-			const docSymbols = await vscode.commands.executeCommand(
-				'vscode.executeDocumentSymbolProvider',
-				vscode.window.activeTextEditor?.document.uri
-			) as vscode.DocumentSymbol[];
-			const symbolsToFind = [vscode.SymbolKind.Class, vscode.SymbolKind.Function, vscode.SymbolKind.Method, vscode.SymbolKind.Constructor];
-			const filtedSymbols = docSymbols
-				? docSymbols.filter(symbol => symbolsToFind.includes(symbol.kind))
-				: undefined;
-			let words: string[] = [];
-			filtedSymbols?.forEach(element => {
-				// 関数を表示
-				words.push(element.name);
-				tree.root.addChild(new sidebar.TreeElement('function: ' + element.name));
-				tree.refresh();
+		vscode.window.onDidChangeTextEditorSelection(async event => {
+			const document = vscode.window.activeTextEditor?.document;
+			const docSymbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', document?.uri) as vscode.DocumentSymbol[];
+			const symbolsToFind = Object.values(vscode.SymbolKind);
+			const foundSymbols = docSymbols ? docSymbols.filter(symbol => symbolsToFind.includes(symbol.kind)) : undefined;
+			panel.webview.postMessage({ command: "drawCanvas" });
+
+			// シンボル階層を構築
+			const fullname = document ? document.fileName : '';
+			const folders = (vscode.workspace.workspaceFolders??[]).filter(folder => document?.fileName.includes(folder.name));
+			const filename = folders.length > 0 ? fullname.replace(folders[0].uri.path, '') : fullname;
+			const rootSymbol = new SYMBOL.Symbol(vscode.SymbolKind.File, filename, 0, document?.lineCount ? document.lineCount - 1 : 0);
+			const sumSymbol = (found: vscode.DocumentSymbol, symbol: SYMBOL.Symbol) => {
+				const branch = new SYMBOL.Symbol(found.kind, found.name, found.range.start.line, found.range.end.line);
+				found.children.forEach(child => { sumSymbol(child, branch); });
+				symbol.addChild(branch);
+			};
+			foundSymbols?.forEach(found => { sumSymbol(found, rootSymbol); });
+
+			// サイドバーの表示
+			tree.root.children.forEach(child => { 
+				tree.root.removeChild(child);
 			});
+			tree.root.children.forEach(child => { 
+				tree.root.removeChild(child);
+			});
+			//const rootTree = new sidebar.TreeElement(vscode.SymbolKind[vscode.SymbolKind.File] +': ' + filename + '=' + document?.lineCount);
+			const sumTree = (symbol: SYMBOL.Symbol, element: sidebar.TreeElement | null): sidebar.TreeElement => {
+				const branch = new sidebar.TreeElement(vscode.SymbolKind[symbol.kind] +': ' + symbol.name + '=' + symbol.lineCount);
+				symbol.children.forEach(child => { sumTree(child, branch); });
+				element?.addChild(branch);
+				return branch;
+			};
+			const rootTree = sumTree(rootSymbol, null);
+			tree.root.addChild(rootTree);
+			tree.refresh();
+
+			// ファイルを3Dで表示
+			panel.webview.postMessage({ command: "showSymbol", value: rootSymbol });
 			console.log('languageId: ' + vscode.window.activeTextEditor?.document.languageId??'');
-			//panel.webview.postMessage({ command: "showWord", value: words as any });
 
 			// 選択が有れば
 			if (event.selections.length > 0) {
@@ -86,7 +114,6 @@ export class Attractor {
 					const range = doc.getWordRangeAtPosition(element.start);
 					this._selected = doc.getText(range);
 					// 単語を表示
-					panel.webview.postMessage({ command: "showWord", value: this._selected });
 					tree.root.addChild(new sidebar.TreeElement('word: ' + this._selected));
 					tree.refresh();
 				});
@@ -131,16 +158,14 @@ export class Attractor {
 			</head>
 			<body>
 				<div>
-					<div>
-						<button class="two-button">＋２</button>
-						<div id="counter-value">${this._counter}</div>
-					</div>
-					<div>
-						<label>Selected</label>
-						<div id="selected-word">${this._selected}</div>
-					</div>
+					<button class="redraw-button">再描画</button>
+					<div id="selected-word" class="stored-value">${this._selected}</div>
+					<div id="camera-store" class="stored-value">${this._cametaStore}</div>
 				</div>
-				<div id="editor-base"><canvas id="editor-canvas" /></div>
+				<div id="editor-base"><canvas id="editor-canvas"
+					onPointerDown="handlePointerDown"
+					onPointerMove="handlePointerMove"
+					onPointerUp="handlePointerUp" /></div>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;

@@ -1,6 +1,6 @@
 /** @file Code Attractor extension for Visual Studio Code */
 import * as vscode from 'vscode';
-import * as lsp_client from 'vscode-languageclient';
+//import * as lsp_client from 'vscode-languageclient';
 import * as sidebar from './sidebar';
 import * as editor from './editor';
 
@@ -11,7 +11,7 @@ import * as editor from './editor';
 export function activate(context: vscode.ExtensionContext) {
 	console.log('"vscode-code-attractor" is now active!');
 	const packageJson = vscode.extensions.getExtension('suzukimitsuru.code-attractor')?.packageJSON;
-	const lsp = lsp_client.ReferencesRequest.method;
+//	const lsp = lsp_client.ReferencesRequest.method;
 
 	// サイドバーの登録
 	const tree = new sidebar.TreeProvider(new sidebar.TreeElement('root'));

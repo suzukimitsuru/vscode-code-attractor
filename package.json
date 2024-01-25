@@ -2,7 +2,7 @@
   "name": "code-attractor",
   "displayName": "Code Attractor",
   "description": "I wish to make a attracting foce diagram of the relationship between chords",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "preview": true,
   "publisher": "suzukimitsuru",
   "keywords": [
@@ -74,7 +74,6 @@
     "vscode": "^1.81.0"
   },
   "devDependencies": {
-    "@types/cannon": "^0.1.12",
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.1",
     "@types/node": "20.2.5",
@@ -94,7 +93,8 @@
     "webpack-cli": "^5.1.1"
   },
   "dependencies": {
-    "cannon": "^0.6.2",
+    "cannon-es": "^0.20.0",
+    "cannon-es-debugger": "^1.0.0",
     "three": "^0.159.0",
     "vscode-languageclient": "^9.0.1",
     "xml2js": "^0.6.2"

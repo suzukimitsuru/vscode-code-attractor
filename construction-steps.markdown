@@ -3,15 +3,6 @@
 VSCode DevTools: Option+Command+I
 code --uninstall-extension suzukimitsuru.code-attractor
 
-## 8.cannon.js - Lightweight 3D physics for the web
-
-Webの為の軽い3次元物理エンジン
-
-``` shell
-npm install --save cannon
-npm install --save-dev @types/cannon
-```
-
 ## 9.Three.js – JavaScript 3D Library
 
 WebGLを使って三次元表現ができるライブラリ
@@ -22,4 +13,16 @@ WebGLを使って三次元表現ができるライブラリ
 npm install --save three
 npm install --save-dev @types/three
 npm install --save-dev three-orbitcontrols-ts
+```
+
+## 8.cannon.js - Lightweight 3D physics for the web
+
+Webの為の軽い3次元物理エンジン
+
+- 参考: [Cannon.js の世界へようこそ！ ３歩でわかる お手軽 物理シミュレーション](https://qiita.com/dsudo/items/66f41ef514344afeec4e)
+
+``` shell
+npm install --save cannon-es
+npm install --save cannon-es-debugger
+npm install --save-dev @types/cannon-es-debugger
 ```
