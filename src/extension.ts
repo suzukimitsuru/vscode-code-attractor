@@ -4,12 +4,15 @@ import * as vscode from 'vscode';
 import * as sidebar from './sidebar';
 import * as editor from './editor';
 
+// OutputChannel を作成
+const logs = vscode.window.createOutputChannel('Code Attractor', { log: true});
+
 /**
  * @function 拡張機能の有効化イベント
  * @param context extention contexest
  */
 export function activate(context: vscode.ExtensionContext) {
-	console.log('"vscode-code-attractor" is now active!');
+	logs.appendLine('"vscode-code-attractor" is now active!');
 	const packageJson = vscode.extensions.getExtension('suzukimitsuru.code-attractor')?.packageJSON;
 //	const lsp = lsp_client.ReferencesRequest.method;
 
@@ -18,7 +21,14 @@ export function activate(context: vscode.ExtensionContext) {
 	const sideview = vscode.window.createTreeView('codeattractor.sidebar', {treeDataProvider: tree});
 	context.subscriptions.push(sideview);
 
-	// エディタ(コマンド)の登録
+	// ログ出力ビューコマンドの登録
+	const logsCommand = vscode.commands.registerCommand('codeattractor.showLogs', () => {
+		// 出力ビューを表示
+		logs.show(true);
+	});
+	context.subscriptions.push(logsCommand);
+
+	// エディタを開くコマンドの登録
 	let _editor: editor.Attractor | null = null;
 	const openEditor = vscode.commands.registerCommand('codeattractor.openEditor', () => {
 
@@ -37,7 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
 				column, {enableScripts: true, localResourceRoots: [roots] });
 			panel.iconPath = vscode.Uri.joinPath(roots, 'codeattractor-icon.svg');
 			panel.onDidDispose(() => _editor = null);
-			_editor = new editor.Attractor(panel, roots, tree);
+			_editor = new editor.Attractor(logs, panel, roots, tree);
 		}
 	});
 	context.subscriptions.push(openEditor);
@@ -48,5 +58,5 @@ export function activate(context: vscode.ExtensionContext) {
  * @description VSCodeの終了/無効にする/アンインストール/
  */
 export function deactivate() {
-	console.log('"vscode-code-attractor" is now deactivate!');
+	logs.appendLine('"vscode-code-attractor" is now deactivate!');
 }

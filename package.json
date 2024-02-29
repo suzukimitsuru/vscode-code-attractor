@@ -36,6 +36,14 @@
         "category": "Code Attractor",
         "icon": "media/codeattractor-icon.svg",
         "enablement": "true"
+      },
+      {
+        "command": "codeattractor.showLogs",
+        "title": "Show Logs",
+        "shortTitle": "open",
+        "category": "Code Attractor",
+        "icon": "media/codeattractor-icon.svg",
+        "enablement": "true"
       }
     ],
     "menus": {

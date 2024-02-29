@@ -4,7 +4,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import * as CANNON from 'cannon-es';
 import CannonDebugger from 'cannon-es-debugger';
 import * as SYMBOL from './symbol';
-import { Color, Position } from 'vscode';
 
 class Vector {
     constructor(public readonly x: number, public readonly y: number, public readonly z: number) {}
@@ -55,7 +54,7 @@ class Ground extends ViewObject {
                 data[index + 3] = 256;//x === y ? 256 : 128;  // Alpha
             }
         }
-        console.log(`check: ${checkMeter} meter ${count} count ${checkColor.r * 256},${checkColor.g * 256},${checkColor.b * 256}`);
+        /////console.log(`check: ${checkMeter} meter ${count} count ${checkColor.r * 256},${checkColor.g * 256},${checkColor.b * 256}`);
         const texture = new THREE.DataTexture(data, width, width, THREE.RGBAFormat, THREE.UnsignedByteType);
         texture.repeat.set(count / 2, count / 2);
         texture.wrapS = THREE.RepeatWrapping;
@@ -84,6 +83,7 @@ class Ground extends ViewObject {
     }
 }
 class Cube extends ViewObject {
+    //public readonly position: Location;
     public readonly symbol: SYMBOL.Symbol;
     public readonly material: CANNON.Material;
     public readonly _body: CANNON.Body;
@@ -91,18 +91,22 @@ class Cube extends ViewObject {
     public constructor(world: CANNON.World, scene: THREE.Scene, symbol: SYMBOL.Symbol, size: Distance, position: Location, color?: string | number) {
         super(world, scene, size);
         this.symbol = symbol;
+        const realPosition = symbol.position ? symbol.position : position;
+        const realQuaternion = symbol.quaternion ? symbol.quaternion : new SYMBOL.Quaternion(0, 0, 0, 0);
+
+        // 実体を生成
         this.material = new CANNON.Material({
             restitution: 0.5,   // 反発係数
         });
-        const thickness = 0.001; // 厚み 1mm
+        const thickness = 0.1; // 厚み 1mm
         const density = 1;   // 水の密度: 1 g/mm3
         const kiro = 1000;
         const volume = ((size.x * kiro) * (size.y * kiro) * (size.z * kiro)) / kiro;
-        console.log(`${symbol.name} line: ` + symbol.lineCount + ' / 1000 = volume:' + volume + ' -> meter:' + size.x + ' mass:' + (density * volume) / kiro);
+        /////console.log(`${symbol.name} line: ` + symbol.lineCount + ' / 1000 = volume:' + volume + ' -> meter:' + size.x + ' mass:' + (density * volume) / kiro);
         this._body = new CANNON.Body({
-            mass: (density * volume) / kiro / 10, // 質量Kg
+            mass: (density * volume) / kiro / kiro, // 質量Kg
             material: this.material,
-            position: new CANNON.Vec3(position.x, position.y, position.z),
+            position: new CANNON.Vec3(realPosition.x, realPosition.y, realPosition.z),
             collisionResponse: true,    // 衝突
         });
         const shapeX = new CANNON.Box(new CANNON.Vec3(thickness / 2, size.y / 2, size.z / 2));
@@ -115,10 +119,10 @@ class Cube extends ViewObject {
         this._body.addShape(shapeZ, new CANNON.Vec3(0, 0, 0 + (size.z / 2) - (thickness / 2)));
         this._body.addShape(shapeZ, new CANNON.Vec3(0, 0, 0 - (size.z / 2) - (thickness / 2)));
         world.addBody(this._body);
-        // 
+
+        // 外観を生成
         this._mesh = new THREE.Mesh(
             new THREE.BoxGeometry(size.x, size.y, size.z),
-//            new THREE.MeshBasicMaterial({ color: 'aqua' }),
             new THREE.MeshPhongMaterial({
                 color: color,
                 envMap: null,           // テクスチャ
@@ -130,6 +134,8 @@ class Cube extends ViewObject {
                 //specular:0x696969 //光沢部の色
             })
         );
+        //this._mesh.position.set(realPosition.x, realPosition.y, realPosition.z);
+        //this._mesh.quaternion.set(realQuaternion.x, realQuaternion.y, realQuaternion.z, realQuaternion.w);
         this._mesh.receiveShadow = true;
         this._mesh.castShadow = true;
         scene.add(this._mesh);
@@ -147,9 +153,18 @@ export class View {
     private readonly _camera: THREE.Camera;
     private _cmeraPreviousY = 0;
     private readonly _ground: Ground;
-    private _objects: ViewObject[] = [];
+    private _objects: Cube[] = [];
+    private _symbol: SYMBOL.Symbol = new SYMBOL.Symbol(SYMBOL.SymbolKind.Null, 'null', '', 1, 1);
+
+    private _controls: OrbitControls | null = null;
+    private _interval: NodeJS.Timer | null = null;
     
-    constructor(canvas: HTMLCanvasElement, width: number, height: number, cameraPosision: Location | null) {
+	/** @constructor
+	 * @param canvas    Webキャンバス
+	 * @param width	    Webキャンバスの幅
+	 * @param height    Webキャンバスの高さ
+	 */
+    constructor(canvas: HTMLCanvasElement, width: number, height: number) {
         // 描画機を作成
         const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
         //this._renderer.setClearColor(0x000000, 0); // default
@@ -162,13 +177,38 @@ export class View {
         });
         // 空間を作成
         this._scene = new THREE.Scene();
-        // カメラを作成
-        this._camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-        this._camera.position.z = cameraPosision ? cameraPosision.z : 5;
-        this._camera.position.y = cameraPosision ? cameraPosision.y : 5;
-        this._camera.position.x = cameraPosision ? cameraPosision.x : 0;
         // 地面を追加
-        this._ground = new Ground(this._world, this._scene, new Distance(500, 0.01, 500), new THREE.Color('lightgreen'), 0.1);
+        this._ground = new Ground(this._world, this._scene, new Distance(5000, 1, 5000), new THREE.Color('lightgreen'), 10);
+        // カメラの生成
+        this._camera = new THREE.PerspectiveCamera(45, width / height, 0.1, this._ground.size.x);
+    }
+
+	/** @function 破棄 */
+	public dispose() {
+
+		// 関連リソースを破棄
+        this._objects = [];
+        if (this._interval) { clearInterval(this._interval); }
+        if (this._controls) { this._controls.dispose(); }
+	}
+
+    /** カメラ位置の再現
+     * @param position カメラ位置
+    */
+    public positionningCamera(position: Location) {
+        this._camera.position.set(position.x, position.y, position.z);
+    }
+
+    // カメラを全体が見える位置に移動
+    public centerCamera() {
+        const boundingBox = new THREE.Box3().setFromObject(this._scene);
+        const boxCenter = new THREE.Vector3();
+        const boxSize = new THREE.Vector3();
+        boundingBox.getCenter(boxCenter);
+        boundingBox.getSize(boxSize);
+        this._camera.position.x = boxCenter.x;
+        this._camera.position.y = 200 * 100;
+        this._camera.position.z *= Math.max(boxSize.x, boxSize.y, boxSize.z);
     }
 
     /** 光あれ */
@@ -177,7 +217,7 @@ export class View {
         const directionalLight = new THREE.DirectionalLight('white');//PointLight('white');
         directionalLight.castShadow = true;
         //const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-        directionalLight.position.set(1, 1, 1);
+        directionalLight.position.set(this._ground.size.x, this._ground.size.x, this._ground.size.z);
         this._scene.add(directionalLight);
         // 環境光を作成
         const ambientLight = new THREE.AmbientLight('white');
@@ -186,104 +226,143 @@ export class View {
 
     /** 行数から立方体の大きさを求める */
     private _cubeSizeByLineCount(lineCount: number): Distance {
-        const kiro = 1000;
-        const mm = lineCount;
-        const meter = mm / kiro;
-        return new Distance(meter, meter, meter);
+        const cm = lineCount / 10;
+        return new Distance(cm, cm, cm);
     }
 
     /** シンボル木の表示 */
-    public showSymbolTree(symbol: SYMBOL.Symbol) {
-        const axes = new THREE.AxesHelper();
+    public showSymbolTree(symbolText: string, operation: string) {
+        const symbol = symbolText.length > 0 ? JSON.parse(symbolText) as SYMBOL.Symbol : null;
+        if (symbol) {
 
-        const ancorRadius = 0.25;
-        const ancorBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(5, 4, 0) });
-        const ancorMesh = new THREE.Mesh(
-            new THREE.SphereGeometry(ancorRadius),
-            new THREE.MeshPhongMaterial({ color: 'red' })
-        );
-        ancorMesh.position.set(5, 4, 0);
+            // シンボルの再構成
+            this._symbol = new SYMBOL.Symbol(symbol.kind, symbol.name, symbol.filename, symbol.startLine, symbol.endLine,
+                symbol.updateId, symbol.position, symbol.quaternion);
+            symbol.children.forEach(child => {
+                const childSymbol = new SYMBOL.Symbol(child.kind, child.name, child.filename, child.startLine, child.endLine,
+                    symbol.updateId, child.position, child.quaternion);
+                this._symbol.addChild(childSymbol);
+            });
+            console.log(`showSymbolTree(${operation}):${JSON.stringify(this._symbol.updateId)}`);
+            const axes = new THREE.AxesHelper();
+
+            // オブジェクトのサンプルを生成
+            const force = 10000000000;
+            const ancorRadius = 0.25 * 100;
+            this._createObjectSample(force, ancorRadius);
+
+            // ファイル図を生成
+            const fileSize = this._cubeSizeByLineCount(this._symbol.lineCount);
+            let currentY = fileSize.y * 5;
+            let previousBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(0, currentY, 0) });
+            const filerMesh = new THREE.Mesh(new THREE.SphereGeometry(ancorRadius), new THREE.MeshPhongMaterial({ color: 'red' }));
+            filerMesh.position.set(0, currentY, 0);
+            this._scene.add(filerMesh);
+            /////console.log(`child.name:${this._symbol.name} currentY:${currentY} size.y:${ancorRadius * 2}`);
+
+            currentY -= ancorRadius * 2;
+            let previousUnder = -ancorRadius;
+            this._symbol.children.forEach(child => {
+
+                // シンボルを作成
+                const size = this._cubeSizeByLineCount(child.lineCount);
+                const locateX = (Math.random() * fileSize.x) - (fileSize.x / 2);
+                const locateZ = (Math.random() * fileSize.z) - (fileSize.z / 2);
+                const position = new Location(0, currentY - (size.y / 2), 0);
+                const color = this._convertSymbolKindToColor(child.kind);
+                /////console.log(`child.name:${child.name} currentY:${currentY} size.y:${size.y}`);
+                const cube = new Cube(this._world, this._scene, child, size, position, color);
+                this._objects.push(cube);
+
+                // シンボルと地面の接触
+                const contactMaterial = new CANNON.ContactMaterial(cube.material, this._ground.material, {
+                    friction: 0.5,                      // 摩擦係数
+                    contactEquationStiffness: 100000 * 100,    // 剛性(変形し易さ)
+                });
+                this._world.addContactMaterial(contactMaterial);
+
+                // 前のシンボルと接続
+                const constraint = new CANNON.PointToPointConstraint(
+                    previousBody,   new CANNON.Vec3(0, previousUnder, 0),  // 図形の中心からの接続点
+                    cube._body,     new CANNON.Vec3(0, size.y / 2, 0), // 図形の中心からの接続点
+                    force
+                );
+                this._world.addConstraint(constraint);
+
+                // 前の１シンボル
+                /////console.log(`previousUnder:${previousUnder} cube.size.y:${cube.size.y} cube.size.y / 2:${cube.size.y / 2}`);
+                previousBody = cube._body;
+                currentY -= size.y;
+                previousUnder =  -size.y;
+            });
+        }
+    }
+
+    // シンボルの色を返す
+    private _convertSymbolKindToColor(kind: SYMBOL.SymbolKind): string {
+        let color = '';
+        switch (kind) {
+            case SYMBOL.SymbolKind.Function:    color ='magenta';   break;
+            case SYMBOL.SymbolKind.Method:      color ='magenta';   break;
+            case SYMBOL.SymbolKind.Property:    color ='white';     break;
+            case SYMBOL.SymbolKind.Class:       color ='orange';    break;
+            case SYMBOL.SymbolKind.Variable:    color ='cyan';      break;
+            default:                            color ='gray';      break;
+        }
+        return color;
+    }
+
+    // オブジェクトのサンプルを生成
+    private _createObjectSample(force: number, ancorRadius: number) {
+
+        // アンカーを生成
+        const ancorPosition = new Location(500, 300, 0);
+        const ancorBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(ancorPosition.x, ancorPosition.y, ancorPosition.z) });
+        const ancorMesh = new THREE.Mesh(new THREE.SphereGeometry(ancorRadius), new THREE.MeshPhongMaterial({ color: 'red' }));
+        ancorMesh.position.set(ancorPosition.x, ancorPosition.y, ancorPosition.z);
         this._scene.add(ancorMesh);
 
-        const symbolFirst = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'first', 0, 100);
-        const cubeFirst = new Cube(this._world, this._scene, symbolFirst, new Distance(1, 1, 1), new Location(5-1.5, 0.5, 0), 'gray');
+        // 1つ目のシンボルを生成
+        const symbolFirst = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'first', '', 0, 80 - 1);
+        const sizeFirst = this._cubeSizeByLineCount(symbolFirst.lineCount); // new Distance(1, 1, 1)
+        const cubeFirst = new Cube(this._world, this._scene, symbolFirst, sizeFirst, new Location(500, 375, 0), 'gray');
         this._objects.push(cubeFirst);
         const constraintFirst = new CANNON.PointToPointConstraint(
-            ancorBody,              new CANNON.Vec3(0, 0, 0),   // ワールド座標の接続点
+            ancorBody,          new CANNON.Vec3(0, -ancorRadius, 0),   // ワールド座標の接続点
             cubeFirst._body,    new CANNON.Vec3(0, cubeFirst.size.y / 2, 0),   // 図形の中心からの接続点
+            force
         );
         this._world.addConstraint(constraintFirst);
 
-        const symbolSecond = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', 0, 100);
-        const cubeSecond = new Cube(this._world, this._scene, symbolSecond, new Distance(1, 1, 1), new Location(5+1.5, 0.5, 0), 'gray');
+        // 2つ目のシンボルを生成
+        const symbolSecond = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80, 80 + 500 - 1);
+        const sizeSecond = this._cubeSizeByLineCount(symbolSecond.lineCount); // new Distance(1, 1, 1)
+        const positionSecond = new Location(500, 275, 0);
+        const cubeSecond = new Cube(this._world, this._scene, symbolSecond, sizeSecond, positionSecond, 'gray');
         this._objects.push(cubeSecond);
-        const cubeInner = new Cube(this._world, this._scene, symbolSecond, new Distance(0.2, 0.2, 0.2), new Location(5+1.5, 0.5, 0), 'red');
+        const symbolInner = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80 + 500, (80 + 500) + 200 - 1);
+        const sizeInner = this._cubeSizeByLineCount(symbolInner.lineCount);
+        const cubeInner = new Cube(this._world, this._scene, symbolInner, sizeInner, positionSecond, 'red');
         this._objects.push(cubeInner);
         const constraintSecond = new CANNON.PointToPointConstraint(
-            cubeFirst._body,    new CANNON.Vec3(0, -1, 0),   // ワールド座標の接続点
+            cubeFirst._body,    new CANNON.Vec3(0, -(cubeFirst.size.y / 2), 0),       // ワールド座標の接続点
             cubeSecond._body,   new CANNON.Vec3(0, cubeSecond.size.y / 2, 0),   // 図形の中心からの接続点
+            force
         );
         this._world.addConstraint(constraintSecond);
-/**/
-        // ファイル図を生成
-        const fileSize = this._cubeSizeByLineCount(symbol.lineCount);
-        let previousBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(0, fileSize.y, 0) });
-        const filerMesh = new THREE.Mesh(
-            new THREE.SphereGeometry(ancorRadius),
-            new THREE.MeshPhongMaterial({ color: 'red' })
-        );
-        filerMesh.position.set(0, fileSize.y, 0);
-
-        this._scene.add(filerMesh);
-        let previousBottom = 0;
-        symbol.children.forEach(child => {
-
-            // 種類により色を決める
-            let color = '';
-            switch (child.kind) {
-                case SYMBOL.SymbolKind.Function:    color ='magenta';   break;
-                case SYMBOL.SymbolKind.Method:      color ='magenta';   break;
-                case SYMBOL.SymbolKind.Property:    color ='white';     break;
-                case SYMBOL.SymbolKind.Class:       color ='orange';    break;
-                case SYMBOL.SymbolKind.Variable:    color ='cyan';      break;
-                default:                            color ='gray';      break;
-            }
-            //color = 'red';
-
-            // シンボルを作成
-            const size = this._cubeSizeByLineCount(child.lineCount);
-            const locateX = (Math.random() * fileSize.x) - (fileSize.x / 2);
-            const locateZ = (Math.random() * fileSize.z) - (fileSize.z / 2);
-            const cube = new Cube(this._world, this._scene, child, size, new Distance(locateX, size.y, locateZ), color);
-            this._objects.push(cube);
-            // シンボルと地面の接触
-            const contactMaterial = new CANNON.ContactMaterial(cube.material, this._ground.material, {
-                friction: 0.5,                      // 摩擦係数
-                contactEquationStiffness: 100000,    // 剛性(変形し易さ)
-            });
-            this._world.addContactMaterial(contactMaterial);
-            // 前のシンボルと接続
-            const constraint = new CANNON.PointToPointConstraint(
-                previousBody,   new CANNON.Vec3(0, previousBottom, 0),  // 図形の中心からの接続点
-                cube._body,     new CANNON.Vec3(0, cube.size.y / 2, 0), // 図形の中心からの接続点
-            );
-            this._world.addConstraint(constraint);
-
-            // 前の１シンボル
-            previousBody = cube._body;
-            previousBottom = -size.y;
-        });
     }
 
-    public animateWorld(moveCamera: (position: Location) => void) {
+    /** 世界を生かす */
+    public animateWorld(moveCamera: (position: Location) => void, saveSymbol: (symbol: SYMBOL.Symbol) => void) {
         // マウスでブラウズ
-        const controls = new OrbitControls(this._camera, this._renderer.domElement);
-        controls.target.set(0, 0, 0);
-        controls.update();
-        controls.addEventListener('change', event => {
+        this._controls = new OrbitControls(this._camera, this._renderer.domElement);
+        this._controls.target.set(0, 0, 0);
+        this._controls.update();
+        
+        this._controls.addEventListener('change', event => {
             // カメラの移動制限: 地面の下には行けない
             this._camera.position.y = this._camera.position.y > 0 ? this._camera.position.y : this._cmeraPreviousY;
-            this._cmeraPreviousY = this._camera.position.y;
+////            this._cmeraPreviousY = this._camera.position.y;
             moveCamera(new Location(this._camera.position.x, this._camera.position.y, this._camera.position.z));
         });
         this._renderer.render(this._scene, this._camera);
@@ -301,5 +380,45 @@ export class View {
             requestAnimationFrame(animate);
         };
         animate();
+
+        this._interval = setInterval(() => {
+            this._objects.forEach(obj => {
+
+                // メッシュの位置を保存する
+                const position = obj._mesh.position;
+                //obj.symbol.position = new SYMBOL.Position(position.x, position.y, position.z);
+                obj.symbol.setPosition(position.x, position.y, position.z);
+
+                // メッシュの回転を保存する
+                const quaternion = obj._mesh.quaternion;
+                //obj.symbol.quaternion = new SYMBOL.Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+                obj.symbol.setQuaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+            });
+            this._symbol.updateId = new Date().toISOString();
+            saveSymbol(this._symbol);
+        }, 200);
+    }
+
+    /** ポイント位置のシンボルを探す
+     * @param pointerX  ポインタのX位置
+     * @param pointerY  ポインタのY位置
+     * @param callbackFound 見つかった場合のコールバック
+     */
+    public findPointingSymbol(pointerX: number, pointerY: number, callbackFound: (symbol: SYMBOL.Symbol) => void) {
+
+        // ポイント位置のメッシュを探す
+        const pointer = new THREE.Vector2(pointerX, pointerY);
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(pointer, this._camera);
+        const meshs = raycaster.intersectObjects(this._scene.children);
+        if (meshs.length > 0) {
+            
+            // 一番手前のメッシュからシンボルを特定する
+            const clickMesh = meshs[0].object;
+            const clickObjects = this._objects.filter(object => object._mesh.id === clickMesh.id);
+            clickObjects.forEach(clickObject => {
+                callbackFound(clickObject.symbol);
+            });
+        }
     }
 }

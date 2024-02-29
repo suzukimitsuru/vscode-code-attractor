@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 import * as sidebar from './sidebar';
 import * as SYMBOL from './symbol';
+import * as path from 'path';
 
 /** @class Code Attractor Editor */
 export class Attractor {
 	//#region 部品
+		/** ログ出力 */
+		private readonly _logs: vscode.OutputChannel;
 		/** 表示パネル */
 		private readonly _panel: vscode.WebviewPanel;
 		/** WebルートURI */
@@ -14,8 +17,11 @@ export class Attractor {
 	//#endregion
 
 	//#region 値
-		/** 選択した単語 */
-		private _selected: string = 'Please select!';
+		/** フルパスのファイル名 */
+		private _fullName: string = '';
+		/** シンボル木 */
+		private _symbolTree: string = '';
+		/** カメラ位置 */
 		private _cametaStore: string  = '';
 	//#endregion
 
@@ -24,8 +30,9 @@ export class Attractor {
 	 * @param roots	WebルートURI
 	 * @param tree	木構造表示
 	 */
-	public constructor(panel: vscode.WebviewPanel, roots: vscode.Uri, tree: sidebar.TreeProvider) {
-		console.log('"vscode-code-attractor" is create!');
+	public constructor(logs: vscode.OutputChannel, panel: vscode.WebviewPanel, roots: vscode.Uri, tree: sidebar.TreeProvider) {
+		this._logs = logs;
+		this._logs.appendLine('"vscode-code-attractor" is create!');
 		this._panel = panel;
 		this._disposables.push(panel);
 		this._roots = roots;
@@ -53,12 +60,21 @@ export class Attractor {
 					tree.root.addChild(new sidebar.TreeElement('redraw'));
 					tree.refresh();
 					break;
-					case 'moveCamera':
-						const position = JSON.parse(message.value);
-						this._cametaStore = message.value;
-						break;
-				   case 'operation':
-					console.log('operation: ' + message.value);
+				case 'moveCamera':
+					this._cametaStore = message.value;
+					break;
+				case 'saveSymbol':
+					if (this._symbolTree !== message.value) {
+						this._symbolTree = message.value;
+					}
+					break;
+				case 'showFileAtLine':
+					if (message.filename) {
+						this._openFileAtLine(message.filename, message.lineNumber);
+					}
+					break;
+				case 'operation':
+					this._logs.appendLine('operation: ' + message.value);
 					break;
 			}
 		}, null, this._disposables);
@@ -66,64 +82,72 @@ export class Attractor {
 		// エディタの選択変更イベント
 		vscode.window.onDidChangeTextEditorSelection(async event => {
 			const document = vscode.window.activeTextEditor?.document;
-			const docSymbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', document?.uri) as vscode.DocumentSymbol[];
-			const symbolsToFind = Object.values(vscode.SymbolKind);
-			const foundSymbols = docSymbols ? docSymbols.filter(symbol => symbolsToFind.includes(symbol.kind)) : undefined;
-			panel.webview.postMessage({ command: "drawCanvas" });
-
-			// シンボル階層を構築
+			const documentUri = document ? document.uri : '';
 			const fullname = document ? document.fileName : '';
-			const folders = (vscode.workspace.workspaceFolders??[]).filter(folder => document?.fileName.includes(folder.name));
-			const filename = folders.length > 0 ? fullname.replace(folders[0].uri.path, '') : fullname;
-			const rootSymbol = new SYMBOL.Symbol(vscode.SymbolKind.File, filename, 0, document?.lineCount ? document.lineCount - 1 : 0);
-			const sumSymbol = (found: vscode.DocumentSymbol, symbol: SYMBOL.Symbol) => {
-				const branch = new SYMBOL.Symbol(found.kind, found.name, found.range.start.line, found.range.end.line);
-				found.children.forEach(child => { sumSymbol(child, branch); });
-				symbol.addChild(branch);
-			};
-			foundSymbols?.forEach(found => { sumSymbol(found, rootSymbol); });
+			if (this._fullName !== fullname) {
+				this._fullName = fullname;
 
-			// サイドバーの表示
-			tree.root.children.forEach(child => { 
-				tree.root.removeChild(child);
-			});
-			tree.root.children.forEach(child => { 
-				tree.root.removeChild(child);
-			});
-			//const rootTree = new sidebar.TreeElement(vscode.SymbolKind[vscode.SymbolKind.File] +': ' + filename + '=' + document?.lineCount);
-			const sumTree = (symbol: SYMBOL.Symbol, element: sidebar.TreeElement | null): sidebar.TreeElement => {
-				const branch = new sidebar.TreeElement(vscode.SymbolKind[symbol.kind] +': ' + symbol.name + '=' + symbol.lineCount);
-				symbol.children.forEach(child => { sumTree(child, branch); });
-				element?.addChild(branch);
-				return branch;
-			};
-			const rootTree = sumTree(rootSymbol, null);
-			tree.root.addChild(rootTree);
-			tree.refresh();
+				const docSymbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', documentUri) as vscode.DocumentSymbol[];
+				const symbolsToFind = Object.values(vscode.SymbolKind);
+				const foundSymbols = docSymbols ? docSymbols.filter(symbol => symbolsToFind.includes(symbol.kind)) : undefined;
+				if (this._disposables.length > 0) {
+					panel.webview.postMessage({ command: "drawCanvas" });
+				}
 
-			// ファイルを3Dで表示
-			panel.webview.postMessage({ command: "showSymbol", value: rootSymbol });
-			console.log('languageId: ' + vscode.window.activeTextEditor?.document.languageId??'');
+				// シンボル階層を構築
+				const folders = (vscode.workspace.workspaceFolders??[]).filter(folder => document?.fileName.includes(folder.name));
+				const filename = folders.length > 0 ? fullname.replace(folders[0].uri.path, '') : fullname;
+				const rootSymbol = new SYMBOL.Symbol(vscode.SymbolKind.File, filename, fullname, 0, document?.lineCount ? document.lineCount - 1 : 0);
+				const sumSymbol = (found: vscode.DocumentSymbol, symbol: SYMBOL.Symbol) => {
+					const branch = new SYMBOL.Symbol(found.kind, found.name, fullname, found.range.start.line, found.range.end.line);
+					found.children.forEach(child => { sumSymbol(child, branch); });
+					symbol.addChild(branch);
+				};
+				foundSymbols?.forEach(found => { sumSymbol(found, rootSymbol); });
 
-			// 選択が有れば
-			if (event.selections.length > 0) {
-				// 全ての選択を
-				event.selections.forEach(element => {
-					// カーソルがある単語を抽出
-					const doc = event.textEditor.document;
-					const range = doc.getWordRangeAtPosition(element.start);
-					this._selected = doc.getText(range);
-					// 単語を表示
-					tree.root.addChild(new sidebar.TreeElement('word: ' + this._selected));
-					tree.refresh();
+				// サイドバーの表示
+				tree.root.children.forEach(child => { 
+					tree.root.removeChild(child);
 				});
+				tree.root.children.forEach(child => { 
+					tree.root.removeChild(child);
+				});
+				//const rootTree = new sidebar.TreeElement(vscode.SymbolKind[vscode.SymbolKind.File] +': ' + filename + '=' + document?.lineCount);
+				const sumTree = (symbol: SYMBOL.Symbol, element: sidebar.TreeElement | null): sidebar.TreeElement => {
+					const branch = new sidebar.TreeElement(vscode.SymbolKind[symbol.kind] +': ' + symbol.name + '=' + symbol.lineCount);
+					symbol.children.forEach(child => { sumTree(child, branch); });
+					element?.addChild(branch);
+					return branch;
+				};
+				const rootTree = sumTree(rootSymbol, null);
+				tree.root.addChild(rootTree);
+				tree.refresh();
+
+				// ファイルを3Dで表示
+				this._symbolTree = JSON.stringify(rootSymbol);
+				if (this._disposables.length > 0) {
+					panel.webview.postMessage({ command: "showSymbolTree", value: this._symbolTree });
+this._logs.appendLine(`onDidChangeTextEditorSelection(): ${rootSymbol.updateId}`);
+				}
+				this._logs.appendLine('languageId: ' + vscode.window.activeTextEditor?.document.languageId??'');
+
+				// 選択が有れば
+				if (event.selections.length > 0) {
+					// 全ての選択を
+					event.selections.forEach(element => {
+						// カーソルがある単語を抽出
+						const doc = event.textEditor.document;
+						const range = doc.getWordRangeAtPosition(element.start);
+						const selectedWord = doc.getText(range);
+					});
+				}
 			}
 		});
 	}
 
 	/** @function 表示 */
 	public reveal() {
-		console.log('"vscode-code-attractor" is reveal!');
+		this._logs.appendLine('"vscode-code-attractor" is reveal!');
 		this._panel.reveal();
 	}
 
@@ -137,7 +161,7 @@ export class Attractor {
 				x.dispose();
 			}
 		}
-		console.log('"vscode-code-attractor" is now disposed!');
+		this._logs.appendLine('"vscode-code-attractor" is now disposed!');
 	}
 
 	/** @function HTMLを返す */
@@ -146,11 +170,15 @@ export class Attractor {
 		const stylesReset = webview.asWebviewUri(vscode.Uri.joinPath(roots, 'reset.css'));
 		const stylesMain = webview.asWebviewUri(vscode.Uri.joinPath(roots, 'vscode.css'));
 		const nonce = this._getNonce();
+this._logs.appendLine(`_getHtml(): ${this._symbolTree ? JSON.parse(this._symbolTree).updateId : 'space!'}`);
 		return `<!DOCTYPE html>
 			<html lang="jp">
 			<head>
 				<meta charset="UTF-8">
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} http: https: blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'self'; 
+					img-src vscode-resource: ${webview.cspSource} http: https: blob:; 
+					style-src vscode-resource: ${webview.cspSource}; 
+					script-src vscode-resource: ${webview.cspSource} 'nonce-${nonce}';">
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 				<link href="${stylesReset}" rel="stylesheet">
 				<link href="${stylesMain}" rel="stylesheet">
@@ -158,8 +186,8 @@ export class Attractor {
 			</head>
 			<body>
 				<div>
-					<button class="redraw-button">再描画</button>
-					<div id="selected-word" class="stored-value">${this._selected}</div>
+					<button class="stored-value">再描画</button>
+					<div id="symbol-tree" class="stored-value">${this._symbolTree}</div>
 					<div id="camera-store" class="stored-value">${this._cametaStore}</div>
 				</div>
 				<div id="editor-base"><canvas id="editor-canvas"
@@ -180,4 +208,23 @@ export class Attractor {
         }
         return text;
     }
+
+	private _openFileAtLine(filePath: string, lineNumber: number) {
+
+		// 書類を特定する
+		const uri = vscode.Uri.file(path.resolve(filePath));
+		vscode.workspace.openTextDocument(uri).then(document => {
+
+			// 開いているエディタを探す
+			const editor = vscode.window.visibleTextEditors.find(editor => editor.document.uri.toString() === document.uri.toString());
+			const options = editor ? { viewColumn: editor.viewColumn, preview: false } : { preview: false };
+			vscode.window.showTextDocument(document, options).then(editor => {
+
+				// 指定した行に移動する
+				const position = new vscode.Position(lineNumber, 0);
+				editor.selection = new vscode.Selection(position, position);
+				editor.revealRange(new vscode.Range(position, position));
+			});
+		});
+	}
 }
