@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 //import { OrbitControls } from 'three-orbitcontrols-ts'; // Sandbox ではズームできない。
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from './OrbitControls';
+import { WalkThroughControls } from './WalkThroughControls';
 import * as CANNON from 'cannon-es';
 import CannonDebugger from 'cannon-es-debugger';
 import * as SYMBOL from './symbol';
@@ -157,6 +158,7 @@ export class View {
     private _symbol: SYMBOL.Symbol = new SYMBOL.Symbol(SYMBOL.SymbolKind.Null, 'null', '', 1, 1);
 
     private _controls: OrbitControls | null = null;
+    //private _controls: WalkThroughControls | null = null;
     private _interval: NodeJS.Timer | null = null;
     
 	/** @constructor
@@ -356,6 +358,7 @@ export class View {
     public animateWorld(moveCamera: (position: Location) => void, saveSymbol: (symbol: SYMBOL.Symbol) => void) {
         // マウスでブラウズ
         this._controls = new OrbitControls(this._camera, this._renderer.domElement);
+        //this._controls = new WalkThroughControls(this._camera, this._renderer.domElement);
         this._controls.target.set(0, 0, 0);
         this._controls.update();
         
