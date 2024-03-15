@@ -65,17 +65,13 @@ window.addEventListener("DOMContentLoaded", () => {
     // メッセージを受け取る
     window.addEventListener("message", event => {
         switch (event.data.command) {
-            case "drawCanvas":
-                vscode.postMessage({ command: 'operation', value: 'redrw canvas' });
-                ////view = drawCanvas();
-                break;
             case 'centerCamera':
                 view?.centerCamera();
                 break;
             case 'showSymbolTree':
                 if (view) {
                     symbolText = event.data.value;
-                    ////view.dispose();
+                    view.dispose();
                     view.showSymbolTree(symbolText, 'selected');
                 }
                 break;

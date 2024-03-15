@@ -54,12 +54,6 @@ export class Attractor {
 		// メッセージ受信イベント
 		panel.webview.onDidReceiveMessage(async message => {
 			switch (message.command) {
-				case 'redrawRequest':
-					// 再描画
-					panel.webview.postMessage({ command: "drawCanvas" });
-					tree.root.addChild(new sidebar.TreeElement('redraw'));
-					tree.refresh();
-					break;
 				case 'moveCamera':
 					this._cametaStore = message.value;
 					break;
@@ -87,12 +81,10 @@ export class Attractor {
 			if (this._fullName !== fullname) {
 				this._fullName = fullname;
 
+				// 書類からシンボルを抽出
 				const docSymbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', documentUri) as vscode.DocumentSymbol[];
 				const symbolsToFind = Object.values(vscode.SymbolKind);
 				const foundSymbols = docSymbols ? docSymbols.filter(symbol => symbolsToFind.includes(symbol.kind)) : undefined;
-				if (this._disposables.length > 0) {
-					panel.webview.postMessage({ command: "drawCanvas" });
-				}
 
 				// シンボル階層を構築
 				const folders = (vscode.workspace.workspaceFolders??[]).filter(folder => document?.fileName.includes(folder.name));
@@ -126,6 +118,7 @@ export class Attractor {
 				// ファイルを3Dで表示
 				this._symbolTree = JSON.stringify(rootSymbol);
 				if (this._disposables.length > 0) {
+					this.reveal();	// 再描画
 					panel.webview.postMessage({ command: "showSymbolTree", value: this._symbolTree });
 this._logs.appendLine(`onDidChangeTextEditorSelection(): ${rootSymbol.updateId}`);
 				}
