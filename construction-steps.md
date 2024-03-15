@@ -29,7 +29,13 @@ npm install --save cannon-es-debugger
 npm install --save-dev @types/cannon-es-debugger
 ```
 
-## 3.シーン内を動き回れる WalkThroughControls を作る
+## 3.VSCode の拡張機能を公開する
+
+以下のサイトを参考にしました。
+
+- [vscodeの拡張機能(Extension)を公開するまで](https://qiita.com/tkts_knr/items/92a15a9fe7475418b333)
+
+## 4.シーン内を動き回れる WalkThroughControls を作る
 
 視点を中心としたカメラの移動により、自然に三次元空間を移動したい。
 

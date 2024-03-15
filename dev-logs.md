@@ -49,3 +49,19 @@ Note that 'unsafe-inline' is ignored if either a hash or nonce value is present 
 
 script-src vscode-resource: 'self' 'unsafe-inline' 'unsafe-eval' https:;">
 script-src vscode-resource: 'nonce-${nonce}';">
+
+## 3.VSCode の拡張機能を公開する
+
+以下のサイトを参考にしました。
+
+- [vscodeの拡張機能(Extension)を公開するまで](https://qiita.com/tkts_knr/items/92a15a9fe7475418b333)
+
+
+1.https://aex.dev.azure.com/me?mkt=ja-JP にアクセス
+2.(GitHub アカウントで認証をし、登録しました)
+3.Azure DevOps組織 > プロジェクト にアクセス
+    dev.azure.com/suzukimitsuru
+4.Browse marketplace を押下
+5.Publish extensions を押下(右上のメニュー)
+6.Create Publisher
+    suzukimitsrugunmaJapan
