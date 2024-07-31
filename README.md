@@ -1,9 +1,23 @@
-# code-attractor: Attraction force diagram of code relationships
+# vscode-code-attractor: Attraction force diagram of code relationships
 
 Code Attractor は、ソフトウェアの構造を維持しながら育ててゆくために作りました。  
 関係の強さを引力として表現すれば、ソフトウェアの形が見える様になると考えています。  
 良い設計のソフトウェアは、美しく見える事を期待しています。  
 Visual Studio Code の拡張機能として動作します。
+
+## Operation
+
+![Screenshot](vscode-code-attractor.png)
+
+- 1.シンボルを立体的に表示
+  - a) 「エクスプローラー」アクティビティバーを選ぶ。
+  - b) 「CODE ATTRACTOR」サイドバーを展開し、右上のアイコンを押す。
+  - c) 編集エリアの右側に「CODE ATTRACTOR」タブが開く。
+  - d) ソースにカーソルを移すと、シンボルを立体的に表示する。
+    - 「CODE ATTRACTOR」サイドバーにはソースのシンボルをツリー表示する。
+- 2.操作方法
+  - a) ドラッグで上下左右に視点を動かす。
+  - b) 拡大/縮小で前進/後退する。マウスホイールでも同じ。
 
 ## Rordmap @beta
 
@@ -11,10 +25,10 @@ Visual Studio Code の拡張機能として動作します。
   - 1-1.拡張機能プロジェクトを作成する。
   - 1-2.各部の操作方法を模索する。
     - 1-2-1.ファイル選択で定義したシンボルを正方形として吊り下げる。
-    - 1-2-2.シーン内を動き回れる WalkThroughControls を作る。 <- **今ココ！**
-    - 1-2-3.シンボル名を正方形に貼り付ける。
+    - 1-2-2.シーン内を動き回れる WalkThroughControls を作る。
+    - 1-2-3.ポイントしたシンボル名を表示する。
   - 1-3.拡張機能を公開する。
-- 2.呼び出し階層を表示する。
+- 2.呼び出し階層を表示する。 <- **今ココ！**
   - Visual Studio Code の呼び出し階層(Call Tree)を取得し表示できないか？
 - 3.引力図を表示する。
   - 物理エンジンで三次元の引力図を表示する。

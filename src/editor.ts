@@ -3,6 +3,12 @@ import * as sidebar from './sidebar';
 import * as SYMBOL from './symbol';
 import * as path from 'path';
 
+class Parent {
+
+}
+class Child1 implements Parent {}
+class Child2 implements Parent {}
+
 /** @class Code Attractor Editor */
 export class Attractor {
 	//#region 部品
@@ -69,6 +75,9 @@ export class Attractor {
 					break;
 				case 'operation':
 					this._logs.appendLine('operation: ' + message.value);
+					break;
+				case 'debug':
+					this._logs.appendLine('debug: ' + message.message);
 					break;
 			}
 		}, null, this._disposables);
@@ -183,10 +192,13 @@ this._logs.appendLine(`_getHtml(): ${this._symbolTree ? JSON.parse(this._symbolT
 					<div id="symbol-tree" class="stored-value">${this._symbolTree}</div>
 					<div id="camera-store" class="stored-value">${this._cametaStore}</div>
 				</div>
-				<div id="editor-base"><canvas id="editor-canvas"
-					onPointerDown="handlePointerDown"
-					onPointerMove="handlePointerMove"
-					onPointerUp="handlePointerUp" /></div>
+				<div id="editor-base">
+					<div id="editor-pointing-symbol-tooltip"></div>
+					<canvas id="editor-canvas"
+						onPointerDown="handlePointerDown"
+						onPointerMove="handlePointerMove"
+						onPointerUp="handlePointerUp" />
+				</div>
 				<script nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;

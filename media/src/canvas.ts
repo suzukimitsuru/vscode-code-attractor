@@ -1,9 +1,15 @@
 import * as THREE from 'three';
-//import { OrbitControls } from 'three-orbitcontrols-ts'; // Sandbox ではズームできない。
-import { OrbitControls } from './OrbitControls';
-import { WalkThroughControls } from './WalkThroughControls';
+//import WebGPU from 'three/examples/jsm/capabilities/WebGPU.js';
+//import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
+//import WebGPURenderer from 'three/examples/jsm/renderers/webgpu/WebGPURenderer.js';
+//import StorageInstancedBufferAttribute from 'three/examples/jsm/renderers/common/Buffer.js';
 import * as CANNON from 'cannon-es';
 import CannonDebugger from 'cannon-es-debugger';
+
+import { OrbitControls } from './OrbitControls';
+import { WalkThroughControls } from './WalkThroughControls';
+import { ControlsBase } from './ControlsBase';
+
 import * as SYMBOL from './symbol';
 
 /** 座標 */
@@ -11,20 +17,30 @@ class Coodinate {
     constructor(public readonly x: number, public readonly y: number, public readonly z: number) {}
 }
 /** 位置 */
-export class Location extends Coodinate{}
+export class Location extends Coodinate {}
 /** 距離 */
-export class Distance extends Coodinate{}
+export class Distance extends Coodinate {}
+/** 回転 */
+export class Quaternion extends Coodinate {
+    constructor(x: number, y: number, z: number, public readonly w: number) {
+        super(x, y, z);
+    }
+}
+/** 見ている位置と方向 */
+export class Looking {
+    constructor(public readonly position: Location, public readonly quaternion: Quaternion) {}
+}
 
-/** 表示物 */
-class ViewObject {
+/** 表示モデル */
+class ViewModel {
     public readonly size: Distance;
     public constructor(world: CANNON.World, scene: THREE.Scene, size: Distance) {
         this.size = size;
     }
     public copy(): void {}
 }
-/** 地面 */
-class Ground extends ViewObject {
+/** 地面モデル */
+class GroundModel extends ViewModel {
     public readonly material: CANNON.Material;
     private readonly _body: CANNON.Body;
     private readonly _mesh: THREE.Mesh;
@@ -86,8 +102,8 @@ class Ground extends ViewObject {
         this._mesh.quaternion.set(this._body.quaternion.x, this._body.quaternion.y, this._body.quaternion.z, this._body.quaternion.w);
     }
 }
-/** 立方体 */
-class Cube extends ViewObject {
+/** シンボルモデル */
+class SymbolModel extends ViewModel {
     //public readonly position: Location;
     public readonly symbol: SYMBOL.Symbol;
     public readonly material: CANNON.Material;
@@ -127,7 +143,8 @@ class Cube extends ViewObject {
 
         // 外観を生成
         this._mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(size.x, size.y, size.z),
+            //new THREE.SphereGeometry(Math.max(size.x, size.y, size.z) / 2), // 球
+            new THREE.BoxGeometry(size.x, size.y, size.z),  // 立方体
             new THREE.MeshPhongMaterial({
                 color: color,
                 envMap: null,           // テクスチャ
@@ -149,17 +166,24 @@ class Cube extends ViewObject {
     }
 }
 
-export class View {
+/** 表示イベント */
+export interface ViewEventMap {
+    debugLog:   { type: 'debugLog'; message: string; };
+    moveCamera: { type: 'moveCamera'; looking: Looking; };
+    saveSymbol: { type: 'saveSymbol'; symbol: SYMBOL.Symbol; };
+}
+
+/** @class 表示 */
+export class View extends THREE.EventDispatcher<ViewEventMap> {
     private readonly _renderer: THREE.Renderer;
     private readonly _world: CANNON.World;
     private readonly _scene: THREE.Scene;
     private readonly _camera: THREE.Camera;
-    private readonly _ground: Ground;
-    private _objects: Cube[] = [];
+    private readonly _ground: GroundModel;
+    private _objects: SymbolModel[] = [];
     private _symbol: SYMBOL.Symbol = new SYMBOL.Symbol(SYMBOL.SymbolKind.Null, 'null', '', 1, 1);
 
-    private _controls: OrbitControls | null = null;
-    //private _controls: WalkThroughControls | null = null;
+    private _controls: ControlsBase;
     private _saveInterval: NodeJS.Timer | null = null;
     
 	/** @constructor
@@ -168,6 +192,7 @@ export class View {
 	 * @param height    Webキャンバスの高さ
 	 */
     constructor(canvas: HTMLCanvasElement, width: number, height: number) {
+        super();
 
         // 描画機を作成
         const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
@@ -183,13 +208,32 @@ export class View {
         // 空間を作成
         this._scene = new THREE.Scene();
         // 地面を追加
-        this._ground = new Ground(this._world, this._scene, new Distance(5000, 10, 5000), new THREE.Color('lightgreen'), 10);
+        this._ground = new GroundModel(this._world, this._scene, new Distance(5000, 10, 5000), new THREE.Color('lightgreen'), 10);
         // カメラの生成
         this._camera = new THREE.PerspectiveCamera(45, width / height, 0.1, this._ground.size.x);
+
+        // コントローラの生成
+        //this._controls = new OrbitControls(this._camera, this._renderer.domElement);
+        this._controls = new WalkThroughControls(this._camera, this._renderer.domElement);
+        this._controls.target.set(0, 0, 0);
+        this._controls.update();
+        // カメラの移動イベント
+        this._controls.addEventListener('change', () => {
+            // カメラの移動制限: 地面の下には行けない
+            this._camera.position.y = this._camera.position.y > 0 ? this._camera.position.y : 0;
+            // カメラ位置を保存
+            this.dispatchEvent({ type: 'moveCamera', looking: new Looking(
+                new Location(this._camera.position.x, this._camera.position.y, this._camera.position.z),
+                new Quaternion(this._camera.quaternion.x, this._camera.quaternion.y, this._camera.quaternion.z, this._camera.quaternion.w)
+                ) });
+        });
+        this._controls.addEventListener('debug', (event) => { this.dispatchEvent({ type: 'debugLog', message: event.message }); });
     }
 
 	/** @function 破棄 */
 	public dispose() {
+        // イベントを削除
+        if (this._saveInterval) { clearInterval(this._saveInterval); }
 
 		// 関連リソースを破棄
         this._objects.forEach(obj => {
@@ -199,15 +243,24 @@ export class View {
         this._objects = [];
 
         // 制御を破棄
-        if (this._saveInterval) { clearInterval(this._saveInterval); }
-        if (this._controls) { this._controls.dispose(); }
+        this._controls.dispose();
 	}
 
-    /** カメラ位置の再現
-     * @param position カメラ位置
+	/** @function サイズ変更
+     * @param width     ウィンドウの幅
+     * @param height    ウィンドウの高さ
+     */
+    public resize(width: number, height: number) {
+        this._controls.resize(width / height);
+        this._renderer.setSize(width, height);
+    }
+
+    /** カメラが見ている位置と方向の再現
+     * @param looking 見ている位置と方向
     */
-    public positionningCamera(position: Location) {
-        this._camera.position.set(position.x, position.y, position.z);
+    public restoreCamera(looking: Looking) {
+        this._camera.position.set(looking.position.x, looking.position.y, looking.position.z);
+        this._camera.quaternion.set(looking.quaternion.x, looking.quaternion.y, looking.quaternion.z, looking.quaternion.w);
     }
 
     // カメラを全体が見える位置に移動
@@ -218,7 +271,7 @@ export class View {
         boundingBox.getCenter(boxCenter);
         boundingBox.getSize(boxSize);
         this._camera.position.x = boxCenter.x;
-        this._camera.position.y = 200 * 100;
+        this._camera.position.y = boxCenter.y; //200 * 100;
         this._camera.position.z *= Math.max(boxSize.x, boxSize.y, boxSize.z);
     }
 
@@ -282,7 +335,7 @@ export class View {
                 const locateZ = (Math.random() * fileSize.z) - (fileSize.z / 2);
                 const position = new Location(0, currentY - (size.y / 2), 0);
                 const color = this._convertSymbolKindToColor(child.kind);
-                const cube = new Cube(this._world, this._scene, child, size, position, color);
+                const cube = new SymbolModel(this._world, this._scene, child, size, position, color);
                 this._objects.push(cube);
 
                 // シンボルと地面の接触
@@ -331,7 +384,7 @@ export class View {
         // 1つ目のシンボルを生成
         const symbolFirst = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'first', '', 0, 80 - 1);
         const sizeFirst = this._cubeSizeByLineCount(symbolFirst.lineCount); // new Distance(1, 1, 1)
-        const cubeFirst = new Cube(this._world, this._scene, symbolFirst, sizeFirst, new Location(500, 250, 0), 'gray');
+        const cubeFirst = new SymbolModel(this._world, this._scene, symbolFirst, sizeFirst, new Location(500, 250, 0), 'gray');
         this._objects.push(cubeFirst);
         /*const constraintFirst = new CANNON.PointToPointConstraint(
             ancorBody,          new CANNON.Vec3(0, -(ancorRadius + (ancorRadius / 1)), 0),            // ワールド座標の接続点
@@ -346,11 +399,11 @@ export class View {
         const symbolSecond = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80, 80 + 500 - 1);
         const sizeSecond = this._cubeSizeByLineCount(symbolSecond.lineCount); // new Distance(1, 1, 1)
         const positionSecond = new Location(500, 200, 0);
-        const cubeSecond = new Cube(this._world, this._scene, symbolSecond, sizeSecond, positionSecond, 'gray');
+        const cubeSecond = new SymbolModel(this._world, this._scene, symbolSecond, sizeSecond, positionSecond, 'gray');
         this._objects.push(cubeSecond);
         const symbolInner = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80 + 500, (80 + 500) + 200 - 1);
         const sizeInner = this._cubeSizeByLineCount(symbolInner.lineCount);
-        const cubeInner = new Cube(this._world, this._scene, symbolInner, sizeInner, positionSecond, 'red');
+        const cubeInner = new SymbolModel(this._world, this._scene, symbolInner, sizeInner, positionSecond, 'red');
         this._objects.push(cubeInner);
         /*const constraintSecond = new CANNON.PointToPointConstraint(
             cubeFirst._body,    new CANNON.Vec3(0, -((cubeFirst.size.y / 2) + (cubeFirst.size.y / 2)), 0), // ワールド座標の接続点
@@ -362,23 +415,9 @@ export class View {
         this._world.addConstraint(constraintSecond);
     }
 
-    /** 世界を生かす
-     * @param moveCamera    カメラ位置保存コールバック
-     * @param saveSymbol    シンボル保存コールバック
-    */
-    public animateWorld(moveCamera: (position: Location) => void, saveSymbol: (symbol: SYMBOL.Symbol) => void) {
+    /** 世界を生かす */
+    public animateWorld() {
         
-        // コントローラの生成
-        this._controls = new OrbitControls(this._camera, this._renderer.domElement);
-        //this._controls = new WalkThroughControls(this._camera, this._renderer.domElement);
-        this._controls.target.set(0, 0, 0);
-        this._controls.update();
-        this._controls.addEventListener('change', event => {
-            // カメラの移動制限: 地面の下には行けない
-            this._camera.position.y = this._camera.position.y > 0 ? this._camera.position.y : 0;
-            moveCamera(new Location(this._camera.position.x, this._camera.position.y, this._camera.position.z));
-        });
-
         // 世界を動かす
         this._renderer.render(this._scene, this._camera);
         const cannonDebugger = CannonDebugger(this._scene, this._world, {});
@@ -411,8 +450,8 @@ export class View {
 
             // シンボルを保存するs
             this._symbol.updateId = new Date().toISOString();
-            saveSymbol(this._symbol);
-        }, 200);
+            this.dispatchEvent( { type: 'saveSymbol', symbol: this._symbol } );
+        }, 1000);
     }
 
     /** ポイント位置のシンボルを探す
