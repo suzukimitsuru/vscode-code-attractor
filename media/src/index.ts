@@ -56,12 +56,16 @@ const drawCanvas = (): CANVAS.View => {
     // シンボル木の再現
     const symbolElement = document.getElementById('symbol-tree');
     symbolText = symbolElement ? symbolElement.textContent??'' : '';
-    if (symbolText.length > 0) { view.showSymbolTree(symbolText, 'review'); }
+    let center = new CANVAS.Location(0, 500, 500);
+    if (symbolText.length > 0) {
+        view.showSymbolTree(symbolText, 'review');
+        center = view.centerCamera();
+    }
 
     // カメラが見ている位置と方向の再現
     const cameraText = document.getElementById('camera-store')?.innerText;
     const cameraLooking = cameraText   ? JSON.parse(cameraText) as CANVAS.Looking
-        : new CANVAS.Looking(new CANVAS.Location(0, 500, 500), new CANVAS.Quaternion(0, 0, 0, 0));
+        : new CANVAS.Looking(center, new CANVAS.Quaternion(0, 0, 0, 0));
     view.restoreCamera(cameraLooking);
 
     // 世界の作成
@@ -79,7 +83,7 @@ const drawCanvas = (): CANVAS.View => {
     view.addEventListener('debugLog', (event) => {
             vscode.postMessage({ command: 'debug', message: event.message });
         });
-    //view.centerCamera();
+    //view.cameraMove(view.centerCamera());
     return view;
 };
 
@@ -94,13 +98,14 @@ window.addEventListener("DOMContentLoaded", () => {
     if (view === null) {
         vscode.postMessage({ command: 'operation', value: 'create canvas' });
         view = drawCanvas();
+        vscode.postMessage({ command: 'operation', value: 'created canvas' });
     }
 
     // メッセージを受け取る
     window.addEventListener("message", (event) => {
         switch (event.data.command) {
             case 'centerCamera':
-                view?.centerCamera();
+                if (view) { view.cameraMove(view.centerCamera()); }
                 break;
             case 'showSymbolTree':
                 if (view) {

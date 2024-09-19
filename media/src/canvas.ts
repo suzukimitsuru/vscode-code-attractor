@@ -182,10 +182,12 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
     private readonly _ground: GroundModel;
     private _objects: SymbolModel[] = [];
     private _symbol: SYMBOL.Symbol = new SYMBOL.Symbol(SYMBOL.SymbolKind.Null, 'null', '', 1, 1);
+    private _symbolsBox = new THREE.Box3();
+
 
     private _controls: ControlsBase;
-    private _saveInterval: NodeJS.Timer | null = null;
-    
+    private _saveInterval: NodeJS.Timeout | null = null;
+
 	/** @constructor
 	 * @param canvas    Webキャンバス
 	 * @param width	    Webキャンバスの幅
@@ -263,16 +265,23 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         this._camera.quaternion.set(looking.quaternion.x, looking.quaternion.y, looking.quaternion.z, looking.quaternion.w);
     }
 
-    // カメラを全体が見える位置に移動
-    public centerCamera() {
-        const boundingBox = new THREE.Box3().setFromObject(this._scene);
+    // カメラを全体が見える位置
+    public centerCamera(): Location {
         const boxCenter = new THREE.Vector3();
         const boxSize = new THREE.Vector3();
-        boundingBox.getCenter(boxCenter);
-        boundingBox.getSize(boxSize);
-        this._camera.position.x = boxCenter.x;
-        this._camera.position.y = boxCenter.y; //200 * 100;
-        this._camera.position.z *= Math.max(boxSize.x, boxSize.y, boxSize.z);
+        this._symbolsBox.getCenter(boxCenter);
+        this._symbolsBox.getSize(boxSize);
+        this.dispatchEvent({ type: 'debugLog', message: `showSymbolTree(camera) center(${boxCenter.x},${boxCenter.y},${boxCenter.z}) size(${boxSize.x},${boxSize.y},${boxSize.z})` });
+        return new Location(
+            boxCenter.x,
+            boxCenter.y, //200 * 100;
+            1.5 * Math.max(boxSize.x, boxSize.y, boxSize.z)
+        );
+    }
+
+    // カメラを移動する
+    public cameraMove(position: Location): void {
+        this._camera.position.set(position.x, position.y, position.z);
     }
 
     /** 光あれ */
@@ -292,14 +301,21 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
     /** 行数から立方体の大きさを求める 1行=1mm */
     private _cubeSizeByLineCount(lineCount: number): Distance {
         const cm = lineCount / 10;
-        const view = cm < 5 ? 5 : cm;
-        return new Distance(view, view, view);
+        return new Distance(cm, cm, cm);
     }
 
+    private _symbolTreeStopRequest: boolean = false;
+    private _symbolTreeIsMaking: boolean = false;
+
     /** シンボル木の表示 */
-    public showSymbolTree(symbolText: string, operation: string) {
+    public showSymbolTree(symbolText: string, operation: string): void {
         const symbol = symbolText.length > 0 ? JSON.parse(symbolText) as SYMBOL.Symbol : null;
         if (symbol) {
+            // シンボル木の作成完了を待つ
+            if (this._symbolTreeIsMaking) {
+                this._symbolTreeStopRequest = true;
+                while (this._symbolTreeIsMaking) {}
+            }
 
             // シンボルの再構成
             this._symbol = new SYMBOL.Symbol(symbol.kind, symbol.name, symbol.filename, symbol.startLine, symbol.endLine,
@@ -309,51 +325,77 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
                     symbol.updateId, child.position, child.quaternion);
                 this._symbol.addChild(childSymbol);
             });
-            console.log(`showSymbolTree(${operation}):${JSON.stringify(this._symbol.updateId)}`);
             const axes = new THREE.AxesHelper();
 
-            // オブジェクトのサンプルを生成
-            const force = 10 * 1000 * 1000 * 1000 * 1000;
+            const force = 1; //1_000_000;//10 * 1000 * 1000 * 1000 * 1000;   // 剛性(変形し易さ) 0-1_000_000
             const ancorRadius = 10;
+
+            // オブジェクトのサンプルを生成
             ////this._createObjectSample(force, ancorRadius);
 
-            // ファイル図を生成
+            // ファイル赤球を生成
             const fileSize = this._cubeSizeByLineCount(this._symbol.lineCount);
             let currentY = fileSize.y * 3.5;
             let previousBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(0, currentY, 0) });
-            const filerMesh = new THREE.Mesh(new THREE.SphereGeometry(ancorRadius), new THREE.MeshPhongMaterial({ color: 'red', transparent: true, opacity: 0.5 }));
+            const filerMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(ancorRadius),
+                new THREE.MeshPhongMaterial({ color: 'red', transparent: true, opacity: 0.5 })
+            );
             filerMesh.position.set(0, currentY, 0);
             this._scene.add(filerMesh);
-
             currentY -= ancorRadius + (ancorRadius / 4);
-            let previousUnder = -ancorRadius;
-            this._symbol.children.forEach(child => {
+            this._symbolsBox.expandByObject(filerMesh);
 
-                // シンボルを作成
-                const size = this._cubeSizeByLineCount(child.lineCount);
-                const locateX = (Math.random() * fileSize.x) - (fileSize.x / 2);
-                const locateZ = (Math.random() * fileSize.z) - (fileSize.z / 2);
+            // シンボル木を生成
+            this.dispatchEvent({ type: 'debugLog', message: `showSymbolTree(BEGIN)` });
+            let previousUnder = -ancorRadius;
+            this._symbolTreeIsMaking = true;
+            for (let child of this._symbol.children) {
+                if (this._symbolTreeStopRequest) { break; }
+
+                // シンボル箱を作成
+                const size = this._cubeSizeByLineCount(child.lineCount < 50 ? 50 : child.lineCount);
                 const position = new Location(0, currentY - (size.y / 2), 0);
                 const color = this._convertSymbolKindToColor(child.kind);
                 const cube = new SymbolModel(this._world, this._scene, child, size, position, color);
                 this._objects.push(cube);
+                this._symbolsBox.expandByObject(cube._mesh);
 
-                // シンボルと地面の接触
+/*
+                // シンボル箱と地面の接触
                 const contactMaterial = new CANNON.ContactMaterial(cube.material, this._ground.material, {
                     friction: 1,//0.5,                  // 摩擦係数
                     contactEquationStiffness: force,    // 剛性(変形し易さ)
                 });
                 this._world.addContactMaterial(contactMaterial);
+*/
+                // 前のシンボル箱とバネで繋ぐ
+                const contactSpling = new CANNON.Spring(previousBody, cube._body, {
+                    restLength: previousBody.position.y - cube._body.position.y, // 自然長（何も力が加わっていないときのスプリングの長さ）
+                    stiffness: 100,    // スプリングの剛性(硬さ) 100:柔らかい-1000:硬い
+                    damping: 1,         // 減衰係数(振動がどのくらい早く減少するか) 0:遅い-1:早い
+                    localAnchorA: new CANNON.Vec3(0, -1, 0), // ボディAのアンカー（接続点）
+                    localAnchorB: new CANNON.Vec3(0, 1, 0) // ボディBのアンカー（接続点）
+                });
+                // スプリングの力を適用
+                this._world.addEventListener('preStep', function() {
+                    contactSpling.applyForce();
+                });
 
-                // 前のシンボルと接続
+                // 前のシンボル箱と接続
                 const constraint = new CANNON.DistanceConstraint(previousBody, cube._body, previousBody.position.y - cube._body.position.y);
+                constraint.collideConnected = false;    // 衝突接続なし
+                //constraint.stiffness = 100;  // バネの硬さ
+                //constraint.relaxation = 4;   // 緩和係数
                 this._world.addConstraint(constraint);
 
-                // 前のシンボル
+                // 前のシンボル箱を更新
                 previousBody = cube._body;
                 currentY -= size.y + (size.y / 4);
                 previousUnder =  -((size.y / 2) + (size.y / 2));
-            });
+            }
+            this._symbolTreeIsMaking = false;
+            this.dispatchEvent({ type: 'debugLog', message: `showSymbolTree(END)` });
         }
     }
 
@@ -383,7 +425,7 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
 
         // 1つ目のシンボルを生成
         const symbolFirst = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'first', '', 0, 80 - 1);
-        const sizeFirst = this._cubeSizeByLineCount(symbolFirst.lineCount); // new Distance(1, 1, 1)
+        const sizeFirst = this._cubeSizeByLineCount(symbolFirst.lineCount < 50 ? 50 : symbolFirst.lineCount);
         const cubeFirst = new SymbolModel(this._world, this._scene, symbolFirst, sizeFirst, new Location(500, 250, 0), 'gray');
         this._objects.push(cubeFirst);
         /*const constraintFirst = new CANNON.PointToPointConstraint(
@@ -397,12 +439,12 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
 
         // 2つ目のシンボルを生成
         const symbolSecond = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80, 80 + 500 - 1);
-        const sizeSecond = this._cubeSizeByLineCount(symbolSecond.lineCount); // new Distance(1, 1, 1)
+        const sizeSecond = this._cubeSizeByLineCount(symbolSecond.lineCount < 50 ? 50 : symbolSecond.lineCount);
         const positionSecond = new Location(500, 200, 0);
         const cubeSecond = new SymbolModel(this._world, this._scene, symbolSecond, sizeSecond, positionSecond, 'gray');
         this._objects.push(cubeSecond);
         const symbolInner = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80 + 500, (80 + 500) + 200 - 1);
-        const sizeInner = this._cubeSizeByLineCount(symbolInner.lineCount);
+        const sizeInner = this._cubeSizeByLineCount(symbolInner.lineCount < 50 ? 50 : symbolInner.lineCount);
         const cubeInner = new SymbolModel(this._world, this._scene, symbolInner, sizeInner, positionSecond, 'red');
         this._objects.push(cubeInner);
         /*const constraintSecond = new CANNON.PointToPointConstraint(

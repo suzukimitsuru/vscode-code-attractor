@@ -4,6 +4,11 @@
 
 - VSCode DevTools: Option+Command+I
 - uninstall Extension: code --uninstall-extension suzukimitsuru.code-attractor
+- [marketplace](https://marketplace.visualstudio.com/manage/publishers/suzukimitsrugunmajapan)
+- npm upgradeing commands
+  - sudo npm install -g npm@latest
+  - npm install
+  - npm update
 
 ## 1.Three.js – JavaScript 3D Library
 
