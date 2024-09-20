@@ -131,7 +131,7 @@ export class Attractor {
 					panel.webview.postMessage({ command: "showSymbolTree", value: this._symbolTree });
 this._logs.appendLine(`onDidChangeTextEditorSelection(): ${rootSymbol.updateId}`);
 				}
-				this._logs.appendLine('languageId: ' + vscode.window.activeTextEditor?.document.languageId??'');
+				this._logs.appendLine('languageId: ' + vscode.window.activeTextEditor?.document.languageId);
 
 				// 選択が有れば
 				if (event.selections.length > 0) {
