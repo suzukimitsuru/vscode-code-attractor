@@ -48,7 +48,7 @@ class GroundModel extends ViewModel {
         super(world, scene, size);
         // 地面を追加
         this.material = new CANNON.Material({
-            restitution: 0.5,   // 反発係数
+            restitution: 0.1,   // 反発係数 0-1
         });
         this._body = new CANNON.Body({
             mass: 0, // 質量ゼロKg
@@ -117,14 +117,14 @@ class SymbolModel extends ViewModel {
 
         // 実体を生成
         this.material = new CANNON.Material({
-            restitution: 0.5,   // 反発係数
+            restitution: 0.1,   // 反発係数 0-1
         });
         const thickness = 0.1; // 厚み 1mm
         const density = 1;   // 水の密度: 1 g/mm3
         const kiro = 1000;
-        const volume = size.x * size.y * size.z;
+        const volume = size.x; // Math.max(size.x, size.y,  size.z);
         this._body = new CANNON.Body({
-            mass: (density * volume) / kiro, // 質量Kg
+            mass: (density * volume), // 質量g / kiro, // 質量Kg
             material: this.material,
             position: new CANNON.Vec3(realPosition.x, realPosition.y, realPosition.z),
             quaternion: new CANNON.Quaternion(realQuaternion.x, realQuaternion.y, realQuaternion.z, realQuaternion.w),
@@ -222,7 +222,7 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         // カメラの移動イベント
         this._controls.addEventListener('change', () => {
             // カメラの移動制限: 地面の下には行けない
-            this._camera.position.y = this._camera.position.y > 0 ? this._camera.position.y : 0;
+            //this._camera.position.y = this._camera.position.y > 0 ? this._camera.position.y : 0;
             // カメラ位置を保存
             this.dispatchEvent({ type: 'moveCamera', looking: new Looking(
                 new Location(this._camera.position.x, this._camera.position.y, this._camera.position.z),
@@ -274,7 +274,7 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         this.dispatchEvent({ type: 'debugLog', message: `showSymbolTree(camera) center(${boxCenter.x},${boxCenter.y},${boxCenter.z}) size(${boxSize.x},${boxSize.y},${boxSize.z})` });
         return new Location(
             boxCenter.x,
-            boxCenter.y, //200 * 100;
+            (boxCenter.y + boxSize.y) / 2, //200 * 100;
             1.5 * Math.max(boxSize.x, boxSize.y, boxSize.z)
         );
     }
@@ -327,16 +327,17 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
             });
             const axes = new THREE.AxesHelper();
 
-            const force = 1; //1_000_000;//10 * 1000 * 1000 * 1000 * 1000;   // 剛性(変形し易さ) 0-1_000_000
+            const force = 1_000_000_000; //1_000_000;//10 * 1000 * 1000 * 1000 * 1000;   // 剛性(変形し易さ) 0-1_000_000_000
             const ancorRadius = 10;
 
             // オブジェクトのサンプルを生成
-            ////this._createObjectSample(force, ancorRadius);
+            //this._createObjectSample(force, ancorRadius);
 
             // ファイル赤球を生成
             const fileSize = this._cubeSizeByLineCount(this._symbol.lineCount);
             let currentY = fileSize.y * 3.5;
             let previousBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(0, currentY, 0) });
+            let previousSize = new Distance(0, 0, 0);
             const filerMesh = new THREE.Mesh(
                 new THREE.SphereGeometry(ancorRadius),
                 new THREE.MeshPhongMaterial({ color: 'red', transparent: true, opacity: 0.5 })
@@ -348,51 +349,42 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
 
             // シンボル木を生成
             this.dispatchEvent({ type: 'debugLog', message: `showSymbolTree(BEGIN)` });
-            let previousUnder = -ancorRadius;
             this._symbolTreeIsMaking = true;
             for (let child of this._symbol.children) {
                 if (this._symbolTreeStopRequest) { break; }
 
                 // シンボル箱を作成
-                const size = this._cubeSizeByLineCount(child.lineCount < 50 ? 50 : child.lineCount);
+                const size = this._cubeSizeByLineCount(child.lineCount < 1 ? 1 : child.lineCount);
                 const position = new Location(0, currentY - (size.y / 2), 0);
                 const color = this._convertSymbolKindToColor(child.kind);
                 const cube = new SymbolModel(this._world, this._scene, child, size, position, color);
                 this._objects.push(cube);
                 this._symbolsBox.expandByObject(cube._mesh);
 
-/*
                 // シンボル箱と地面の接触
                 const contactMaterial = new CANNON.ContactMaterial(cube.material, this._ground.material, {
-                    friction: 1,//0.5,                  // 摩擦係数
-                    contactEquationStiffness: force,    // 剛性(変形し易さ)
+                    friction: 10,//0.5,                  // 摩擦係数
+                    contactEquationStiffness: force,    // 剛性(変形し易さ) 0-1_000_000_000
                 });
                 this._world.addContactMaterial(contactMaterial);
-*/
+
                 // 前のシンボル箱とバネで繋ぐ
-                const contactSpling = new CANNON.Spring(previousBody, cube._body, {
+                const contactSpling = new CANNON.Spring(cube._body, previousBody, {
+                    localAnchorA: new CANNON.Vec3(0, 0 + (size.y / 2), 0), // ボディAのアンカー（接続点）
+                    localAnchorB: new CANNON.Vec3(0, 0 - (previousSize.y / 2), 0), // ボディBのアンカー（接続点）
                     restLength: previousBody.position.y - cube._body.position.y, // 自然長（何も力が加わっていないときのスプリングの長さ）
-                    stiffness: 100,    // スプリングの剛性(硬さ) 100:柔らかい-1000:硬い
+                    stiffness:  100,    // スプリングの剛性(硬さ) 100:柔らかい-1000:硬い
                     damping: 1,         // 減衰係数(振動がどのくらい早く減少するか) 0:遅い-1:早い
-                    localAnchorA: new CANNON.Vec3(0, -1, 0), // ボディAのアンカー（接続点）
-                    localAnchorB: new CANNON.Vec3(0, 1, 0) // ボディBのアンカー（接続点）
                 });
                 // スプリングの力を適用
                 this._world.addEventListener('preStep', function() {
                     contactSpling.applyForce();
                 });
 
-                // 前のシンボル箱と接続
-                const constraint = new CANNON.DistanceConstraint(previousBody, cube._body, previousBody.position.y - cube._body.position.y);
-                constraint.collideConnected = false;    // 衝突接続なし
-                //constraint.stiffness = 100;  // バネの硬さ
-                //constraint.relaxation = 4;   // 緩和係数
-                this._world.addConstraint(constraint);
-
                 // 前のシンボル箱を更新
                 previousBody = cube._body;
+                previousSize = new Distance(size.x, size.y, size.z);
                 currentY -= size.y + (size.y / 4);
-                previousUnder =  -((size.y / 2) + (size.y / 2));
             }
             this._symbolTreeIsMaking = false;
             this.dispatchEvent({ type: 'debugLog', message: `showSymbolTree(END)` });
@@ -443,7 +435,7 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         const positionSecond = new Location(500, 200, 0);
         const cubeSecond = new SymbolModel(this._world, this._scene, symbolSecond, sizeSecond, positionSecond, 'gray');
         this._objects.push(cubeSecond);
-        const symbolInner = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80 + 500, (80 + 500) + 200 - 1);
+        const symbolInner = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'inner', '', 80 + 500, (80 + 500) + 200 - 1);
         const sizeInner = this._cubeSizeByLineCount(symbolInner.lineCount < 50 ? 50 : symbolInner.lineCount);
         const cubeInner = new SymbolModel(this._world, this._scene, symbolInner, sizeInner, positionSecond, 'red');
         this._objects.push(cubeInner);
@@ -507,9 +499,9 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         const pointer = new THREE.Vector2(pointerX, pointerY);
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(pointer, this._camera);
-        const meshs = raycaster.intersectObjects(this._scene.children);
+        const meshs = raycaster.intersectObjects(this._scene.children, true);
         if (meshs.length > 0) {
-            
+
             // 一番手前のメッシュからシンボルを特定する
             const clickMesh = meshs[0].object;
             const clickObjects = this._objects.filter(object => object._mesh.id === clickMesh.id);

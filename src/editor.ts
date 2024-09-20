@@ -58,26 +58,26 @@ export class Attractor {
 		}, null, this._disposables);
 
 		// メッセージ受信イベント
-		panel.webview.onDidReceiveMessage(async message => {
-			switch (message.command) {
+		panel.webview.onDidReceiveMessage(async event => {
+			switch (event.command) {
 				case 'moveCamera':
-					this._cametaStore = message.value;
+					this._cametaStore = event.value;
 					break;
 				case 'saveSymbol':
-					if (this._symbolTree !== message.value) {
-						this._symbolTree = message.value;
+					if (this._symbolTree !== event.value) {
+						this._symbolTree = event.value;
 					}
 					break;
 				case 'showFileAtLine':
-					if (message.filename) {
-						this._openFileAtLine(message.filename, message.lineNumber);
+					if (event.filename) {
+						this._openFileAtLine(event.filename, event.lineNumber);
 					}
 					break;
 				case 'operation':
-					this._logs.appendLine('operation: ' + message.value);
+					this._logs.appendLine('operation: ' + event.value);
 					break;
 				case 'debug':
-					this._logs.appendLine('debug: ' + message.message);
+					this._logs.appendLine('debug: ' + event.message);
 					break;
 			}
 		}, null, this._disposables);
