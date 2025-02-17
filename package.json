@@ -5,7 +5,7 @@
   "description": "I wish to make a attracting foce diagram of the relationship between chords",
   "version": "0.0.6",
   "preview": true,
-  "publisher": "suzukimitsrugunmaJapan",
+  "publisher": "suzukimitsuru",
   "keywords": [
     "software",
     "visualise",
@@ -52,7 +52,7 @@
         {
           "command": "codeattractor.openEditor",
           "group": "navigation",
-          "when": "view == codeattractor.sidebar || view == explorer"
+          "when": "view == codeattractor.sidebar"
         }
       ]
     },

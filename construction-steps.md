@@ -12,6 +12,20 @@
   - `npm install`
   - `npm update`
 
+await
+54: 3387.549 ms
+54: 3275.669 ms
+54: 3700.365 ms
+54: 3595.721 ms
+54: 3312.207 ms
+
+Promise1
+54: 3103.039 ms
+54: 3085.939 ms
+54: 2976.408 ms
+54: 3139.327 ms
+54: 2974.136 ms
+
 ## 1.Three.js – JavaScript 3D Library
 
 WebGLを使って三次元表現ができるライブラリ
@@ -40,7 +54,30 @@ npm install --save-dev @types/cannon-es-debugger
 
 以下のサイトを参考にしました。
 
-- [vscodeの拡張機能(Extension)を公開するまで](https://qiita.com/tkts_knr/items/92a15a9fe7475418b333)
+- [【VScode】自作した拡張機能を公開する方法](https://qiita.com/yusu79/items/44520c4c67864b0bb3e9)
+
+- sudo npm install -g vsce
+- [Azure DevOps Organization](https://dev.azure.com/suzukimitsuru/)
+  - suzukimitsuru(suzukimitsuru-token: 5nBp2Q3lw5xPlutHEWU8g6nkduggTAStYzKsgZWMVSd4jEsmViUWJQQJ99BBACAAAAAAAAAAAAASAZDOaU2a
+- vsce login suzukimitsuru
+- vsce publish
+- vsce logout suzukimitsuru
+
+  ``` shell
+  suzukimitsuru@suzukimitsuru-MacBook-Pro-2 vscode-code-attractor % vsce publish          
+  (node:14625) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+  (Use `node --trace-deprecation ...` to show where the warning was created)
+  INFO  Publishing 'suzukimitsuru.code-attractor v0.0.6'...
+  INFO  Extension URL (might take a few minutes): https://marketplace.visualstudio.com/items?itemName=suzukimitsuru.code-attractor
+  INFO  Hub URL: https://marketplace.visualstudio.com/manage/publishers/suzukimitsuru/extensions/code-attractor/hub
+  DONE  Published suzukimitsuru.code-attractor v0.0.6.
+  ```
+
+- remove
+  vsce ls-publishers
+  vsce logout suzukimitsuru
+  vsce delete-publisher suzukimitsru
+  vsce delete-publisher suzukimitsrugunmaJapan
 
 ## 4.シーン内を動き回れる WalkThroughControls を作る
 

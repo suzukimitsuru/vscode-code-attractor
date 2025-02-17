@@ -11,8 +11,7 @@ class WorkspaceFolder {
 class WorkspaceFolders {
     private _items: WorkspaceFolder[] = [];
     public constructor() {}
-    public length(): number { return this._items.length; }
-    public item(index: number): WorkspaceFolder { return this._items[index]; }
+    public items(): WorkspaceFolder[] { return this._items; }
     public push(folder: WorkspaceFolder) {
         this._items.push(folder);
     }
@@ -22,7 +21,7 @@ class WorkspaceFolders {
     }
 }
 class CodeDocument {
-    constructor(public readonly document: vscode.TextDocument, public readonly shortName: string) {}
+    constructor(public readonly shortName: string, public readonly document: vscode.TextDocument, public readonly root: SYMBOL.SymbolModel) {}
 }
 
 /** @class Code files */
@@ -49,6 +48,35 @@ export class CodeFiles extends progress.IProgress {
         const start = performance.now();
 
         // フォルダ一覧を検索
+        for (const folder of this._folders.items()) {
+
+            // 中断
+            if (token.isCancellationRequested) { break; }
+
+            const files = await this._listFiles(folder.path);
+            for (const file_name of files) {
+
+                // 中断
+                if (token.isCancellationRequested) { break; }
+
+                // 書類がコードで
+                const short_name = file_name.substring(folder.path.length + 1);
+                const text_doc = await this._loadDocument(file_name);
+                if (text_doc instanceof Object) {
+                
+                    // 除外ファイルでは無かったら
+                    if (! this._excludeId.includes(text_doc.languageId)) {
+                        
+                        // コード書類に追加する
+                        this._documents.push(this._loadCodeDocument(short_name, text_doc));
+                    }
+                }
+
+                // 経過表示
+                progress.report({ increment: 1, message: ` ${short_name}` });
+            }
+        }
+        /*
         let folder_index = 0;
         let folder_name: string | null = null;
         let file_index = -1;
@@ -57,7 +85,7 @@ export class CodeFiles extends progress.IProgress {
 
             // 中断
             if (token.isCancellationRequested) { break; }
-            //await new Promise((resolve) => setTimeout(resolve, 500));
+            //await new Promise((resolve) => setTimeout(resolve, 500)); //実行を遅くして動作確認を湯くり行う
 
             // 次のフォルダ
             if (folder_name === null) {
@@ -70,23 +98,13 @@ export class CodeFiles extends progress.IProgress {
             const file_name = files[file_index];
             const short_name = file_name.substring(folder_name.length + 1);
             const text_doc = await this._loadDocument(file_name);
-            if (text_doc) {
+            if (text_doc instanceof Object) {
+            
                 // 除外ファイルでは無かったら
                 if (! this._excludeId.includes(text_doc.languageId)) {
+                    
                     // コード書類に追加する
-                    this._documents.push(new Promise(async (resolve, reject) => {
-                        try {
-                            // 書類からシンボルを抽出
-                            const doc_promise = vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', text_doc.uri).then( (value) => {
-                                const parent = this._folders.find(folder => text_doc.fileName.includes(folder.name));
-                                const registered_kindes = Object.values(vscode.SymbolKind);
-                                const registered_symbols = (value as vscode.DocumentSymbol[]).filter(symbol => registered_kindes.includes(symbol.kind));
-                                this.task2(parent, text_doc, registered_symbols).then((codeDoc) => resolve(codeDoc));
-                            });
-                        } catch (error) {
-                            reject(error);
-                        }
-                    }) );
+                    this._documents.push(this._loadCodeDocument(short_name, text_doc));
                 }
             }
 
@@ -100,21 +118,26 @@ export class CodeFiles extends progress.IProgress {
             // 経過表示
             progress.report({ increment: 1, message: ` ${short_name}` });
         }
+        */
         const result = await Promise.all(this._documents);
 
         const end = performance.now();
         console.log(`${result.length}: ${(end - start).toFixed(3)} ms`);
     }
-    // thenでtask2を呼び出す時に、第一引数をbindで固定しているため、値の受け取りは以下になる
-    // 第1引数 args  => ['aaa','bbb']
-    // 第2引数 value => ['task1 完了!', '123']
-    private task2(parent: WorkspaceFolder, textDoc: vscode.TextDocument, symbols: vscode.DocumentSymbol[]): Promise<CodeDocument>{
-        return new Promise(function (resolve, reject) {
+
+    /**
+     * シンボル階層を構築
+     * @param shortName 短いファイル名
+     * @param textDoc テキスト文書
+     * @param symbols シンボル配列
+     * @returns 
+     */
+    private _buildSymbolTree(shortName: string, textDoc: vscode.TextDocument, symbols: vscode.DocumentSymbol[]): Promise<CodeDocument>{
+        return new Promise(function (resolve) {
             const file_name = textDoc.uri.path;
-            const short_name = file_name.substring(parent.path.length + 1);
 
             // シンボル階層を構築
-            const root_symbol = new SYMBOL.SymbolModel(vscode.SymbolKind.File, short_name, file_name, 0, textDoc.lineCount ? textDoc.lineCount - 1 : 0);
+            const root_symbol = new SYMBOL.SymbolModel(vscode.SymbolKind.File, shortName, file_name, 0, textDoc.lineCount ? textDoc.lineCount - 1 : 0);
             const sum_symbol = (item: vscode.DocumentSymbol, parent: SYMBOL.SymbolModel) => {
                 const branch = new SYMBOL.SymbolModel(item.kind, item.name, file_name, item.range.start.line, item.range.end.line);
                 for (const child of item.children) {
@@ -125,7 +148,7 @@ export class CodeFiles extends progress.IProgress {
             for (const item of symbols) {
                 sum_symbol(item, root_symbol);
             }
-            resolve( new CodeDocument(textDoc, short_name) );                            
+            resolve( new CodeDocument(shortName, textDoc, root_symbol) );                            
         });
     }
 
@@ -156,11 +179,25 @@ export class CodeFiles extends progress.IProgress {
      * @returns コード書類
      */
     private async _loadDocument(file: string): Promise<vscode.TextDocument | null> {
-        let doc: vscode.TextDocument | null = null;
         try {
             return await vscode.workspace.openTextDocument(file);
         } catch (error) {
             return null;
         }
+    }
+
+    private async _loadCodeDocument(shortName: string, text_doc: vscode.TextDocument): Promise<CodeDocument> {
+        return new Promise(async (resolve) => {
+
+            // 書類からシンボルを抽出
+            const registered_kindes = Object.values(vscode.SymbolKind);
+            const doc_symbols = await vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', text_doc.uri);
+            if (Array.isArray(doc_symbols)) {
+                const registered_symbols = (doc_symbols as vscode.DocumentSymbol[]).filter(symbol => registered_kindes.includes(symbol.kind));
+                this._buildSymbolTree(shortName, text_doc, registered_symbols).then((codeDoc) => resolve(codeDoc));
+            } else {
+                //reject(new vscode.FileSystemError(text_doc.uri));
+            }
+        });
     }
 }
