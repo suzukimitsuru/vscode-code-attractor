@@ -5,10 +5,12 @@
 - VSCode DevTools: Option+Command+I
 - uninstall Extension: code --uninstall-extension suzukimitsuru.code-attractor
 - [marketplace](https://marketplace.visualstudio.com/manage/publishers/suzukimitsrugunmajapan)
+- nvm install: `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash  && source ~/.zshrc`
+- node upgradeing: `nvm install --lts` `nvm alias default 'lts/*'` `nvm ls`
 - npm upgradeing commands
-  - sudo npm install -g npm@latest
-  - npm install
-  - npm update
+  - `sudo npm install -g npm@latest`
+  - `npm install`
+  - `npm update`
 
 ## 1.Three.js – JavaScript 3D Library
 

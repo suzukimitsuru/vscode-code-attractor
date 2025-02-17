@@ -1,3 +1,4 @@
+/** @file Code Attractor Editor: Symbol */
 import * as vscode from 'vscode';
 
 class Vector {
@@ -21,7 +22,8 @@ export class Quaternion extends Vector {
     }
 }
 
-export class Symbol {
+/** @class Symbol model */
+export class SymbolModel {
     public readonly kind: vscode.SymbolKind;
     public readonly name: string;
     public readonly filename: string;
@@ -31,7 +33,7 @@ export class Symbol {
     public updateId: string = '';
     public position: Position | null = null;
     public quaternion: Quaternion | null = null;
-    public children: Symbol[] = [];
+    public children: SymbolModel[] = [];
 	public constructor(kind: vscode.SymbolKind, name: string, filename: string, startLine: number, endLine: number,
         updateId: string = '', position: Position | null = null, quaternion: Quaternion | null = null) {
         this.kind = kind;
@@ -44,7 +46,7 @@ export class Symbol {
         this.position = position ? new Position(position.x, position.y, position.z) : null;
         this.quaternion = quaternion ? new Quaternion(quaternion.x, quaternion.y, quaternion.z, quaternion.w): null;
     }
-    public addChild(child: Symbol) {
+    public addChild(child: SymbolModel) {
         this.children.push(child);
     }
     public setPosition(x: number, y: number, z: number) {
@@ -61,4 +63,9 @@ export class Symbol {
             this.quaternion = new Quaternion(x, y, z, w);
         }
     } 
+}
+
+/** @class Symbol database */
+export class SymbolDB {
+    
 }

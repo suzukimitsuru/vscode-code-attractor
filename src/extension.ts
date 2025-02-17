@@ -1,11 +1,15 @@
 /** @file Code Attractor extension for Visual Studio Code */
 import * as vscode from 'vscode';
 //import * as lsp_client from 'vscode-languageclient';
+import * as status from './status'
 import * as sidebar from './sidebar';
 import * as editor from './editor';
+import * as codefiles from './codeFiles';
+import { resolve } from 'path';
 
-// OutputChannel を作成
-const logs = vscode.window.createOutputChannel('Code Attractor', { log: true});
+const packageJson = vscode.extensions.getExtension('suzukimitsrugunmajapan.code-attractor')?.packageJSON;
+const logs = vscode.window.createOutputChannel(packageJson.displayName, { log: true});
+const statusbar = new status.StatusBar(packageJson.displayName, 'codeattractor.openEditor');
 
 /**
  * @function 拡張機能の有効化イベント
@@ -13,13 +17,18 @@ const logs = vscode.window.createOutputChannel('Code Attractor', { log: true});
  */
 export function activate(context: vscode.ExtensionContext) {
 	logs.appendLine('"vscode-code-attractor" is now active!');
-	const packageJson = vscode.extensions.getExtension('suzukimitsuru.code-attractor')?.packageJSON;
 //	const lsp = lsp_client.ReferencesRequest.method;
 
 	// サイドバーの登録
 	const tree = new sidebar.TreeProvider(new sidebar.TreeElement('root'));
 	const sideview = vscode.window.createTreeView('codeattractor.sidebar', {treeDataProvider: tree});
 	context.subscriptions.push(sideview);
+
+	// 経過表示
+	const files = new codefiles.CodeFiles(vscode.workspace.workspaceFolders??[], 
+		['plaintext', 'markdown', 'shellscript', 
+		'json', 'jsonc', 'xml', 'yaml', 'csv', 'log', 'ini', 'html', 'css', 'svg']);
+	statusbar.maintainSymbols(files);
 
 	// ログ出力ビューコマンドの登録
 	const logsCommand = vscode.commands.registerCommand('codeattractor.showLogs', () => {

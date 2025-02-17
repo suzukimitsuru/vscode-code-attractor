@@ -1,13 +1,8 @@
+/** @file Code Attractor Editor: Show Diagram */
 import * as vscode from 'vscode';
 import * as sidebar from './sidebar';
 import * as SYMBOL from './symbol';
 import * as path from 'path';
-
-class Parent {
-
-}
-class Child1 implements Parent {}
-class Child2 implements Parent {}
 
 /** @class Code Attractor Editor */
 export class Attractor {
@@ -79,6 +74,8 @@ export class Attractor {
 				case 'debug':
 					this._logs.appendLine('debug: ' + event.message);
 					break;
+				default:
+					break;
 			}
 		}, null, this._disposables);
 
@@ -98,9 +95,9 @@ export class Attractor {
 				// シンボル階層を構築
 				const folders = (vscode.workspace.workspaceFolders??[]).filter(folder => document?.fileName.includes(folder.name));
 				const filename = folders.length > 0 ? fullname.replace(folders[0].uri.path, '') : fullname;
-				const rootSymbol = new SYMBOL.Symbol(vscode.SymbolKind.File, filename, fullname, 0, document?.lineCount ? document.lineCount - 1 : 0);
-				const sumSymbol = (found: vscode.DocumentSymbol, symbol: SYMBOL.Symbol) => {
-					const branch = new SYMBOL.Symbol(found.kind, found.name, fullname, found.range.start.line, found.range.end.line);
+				const rootSymbol = new SYMBOL.SymbolModel(vscode.SymbolKind.File, filename, fullname, 0, document?.lineCount ? document.lineCount - 1 : 0);
+				const sumSymbol = (found: vscode.DocumentSymbol, symbol: SYMBOL.SymbolModel) => {
+					const branch = new SYMBOL.SymbolModel(found.kind, found.name, fullname, found.range.start.line, found.range.end.line);
 					found.children.forEach(child => { sumSymbol(child, branch); });
 					symbol.addChild(branch);
 				};
@@ -114,7 +111,7 @@ export class Attractor {
 					tree.root.removeChild(child);
 				});
 				//const rootTree = new sidebar.TreeElement(vscode.SymbolKind[vscode.SymbolKind.File] +': ' + filename + '=' + document?.lineCount);
-				const sumTree = (symbol: SYMBOL.Symbol, element: sidebar.TreeElement | null): sidebar.TreeElement => {
+				const sumTree = (symbol: SYMBOL.SymbolModel, element: sidebar.TreeElement | null): sidebar.TreeElement => {
 					const branch = new sidebar.TreeElement(vscode.SymbolKind[symbol.kind] +': ' + symbol.name + '=' + symbol.lineCount);
 					symbol.children.forEach(child => { sumTree(child, branch); });
 					element?.addChild(branch);

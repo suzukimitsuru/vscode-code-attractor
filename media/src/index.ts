@@ -82,7 +82,7 @@ const drawCanvas = (): CANVAS.View => {
     });
     view.addEventListener('debugLog', (event) => {
             vscode.postMessage({ command: 'debug', message: event.message });
-        });
+    });
     //view.cameraMove(view.centerCamera());
     return view;
 };

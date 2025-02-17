@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-//import WebGPU from 'three/examples/jsm/capabilities/WebGPU.js';
+import * as WebGPU from 'three/examples/jsm/capabilities/WebGPU.js';
 //import WebGL from 'three/examples/jsm/capabilities/WebGL.js';
-//import WebGPURenderer from 'three/examples/jsm/renderers/webgpu/WebGPURenderer.js';
+//import * as WebGPURenderer from "three/examples/jsm/capabilities/";
+//import WebGPURenderer from 'three/examples/jsm/renderers/WebGPURenderer.js';
 //import StorageInstancedBufferAttribute from 'three/examples/jsm/renderers/common/Buffer.js';
 import * as CANNON from 'cannon-es';
 import CannonDebugger from 'cannon-es-debugger';
@@ -34,18 +35,20 @@ export class Looking {
 /** 表示モデル */
 class ViewModel {
     public readonly size: Distance;
-    public constructor(world: CANNON.World, scene: THREE.Scene, size: Distance) {
+    public readonly position: Location;
+    public constructor(size: Distance, position: Location) {
         this.size = size;
+        this.position = position;
     }
     public copy(): void {}
 }
 /** 地面モデル */
 class GroundModel extends ViewModel {
     public readonly material: CANNON.Material;
-    private readonly _body: CANNON.Body;
-    private readonly _mesh: THREE.Mesh;
-    public constructor(world: CANNON.World, scene: THREE.Scene, public readonly size: Distance, checkColor: THREE.Color, checkMeter: number) {
-        super(world, scene, size);
+    public readonly _body: CANNON.Body;
+    public readonly _mesh: THREE.Mesh;
+    public constructor(size: Distance, checkColor: THREE.Color, checkMeter: number) {
+        super(size, new Location(0, 0, 0));
         // 地面を追加
         this.material = new CANNON.Material({
             restitution: 0.1,   // 反発係数 0-1
@@ -59,7 +62,6 @@ class GroundModel extends ViewModel {
             position: new CANNON.Vec3(0, 0, 0),
             collisionResponse: true,    // 衝突
         });
-        world.addBody(this._body);
 
         //床の描画
         const count = size.x / checkMeter;
@@ -95,7 +97,6 @@ class GroundModel extends ViewModel {
         );
         this._mesh.receiveShadow = true;
         this._mesh.castShadow = true;
-        scene.add(this._mesh);
     }
     copy(): void {
         this._mesh.position.set(this._body.position.x, this._body.position.y, this._body.position.z);
@@ -109,9 +110,10 @@ class SymbolModel extends ViewModel {
     public readonly material: CANNON.Material;
     public readonly _body: CANNON.Body;
     public readonly _mesh: THREE.Mesh;
-    public constructor(world: CANNON.World, scene: THREE.Scene, symbol: SYMBOL.Symbol, size: Distance, position: Location, color?: string | number) {
-        super(world, scene, size);
+    public constructor(symbol: SYMBOL.Symbol, size: Distance, position: Location, color?: string | number) {
+        super(size, position);
         this.symbol = symbol;
+        const isFile = (symbol.kind == SYMBOL.SymbolKind.File);
         const realPosition = symbol.position ? symbol.position : position;
         const realQuaternion = symbol.quaternion ? symbol.quaternion : new SYMBOL.Quaternion(0, 0, 0, 0);
 
@@ -124,7 +126,7 @@ class SymbolModel extends ViewModel {
         const kiro = 1000;
         const volume = size.x; // Math.max(size.x, size.y,  size.z);
         this._body = new CANNON.Body({
-            mass: (density * volume), // 質量g / kiro, // 質量Kg
+            mass: isFile ? 0 : density * volume, // 質量g / kiro, // 質量Kg
             material: this.material,
             position: new CANNON.Vec3(realPosition.x, realPosition.y, realPosition.z),
             quaternion: new CANNON.Quaternion(realQuaternion.x, realQuaternion.y, realQuaternion.z, realQuaternion.w),
@@ -139,7 +141,6 @@ class SymbolModel extends ViewModel {
         this._body.addShape(shapeY, new CANNON.Vec3(0, 0 - (size.y / 2) - (thickness / 2), 0));
         this._body.addShape(shapeZ, new CANNON.Vec3(0, 0, 0 + (size.z / 2) - (thickness / 2)));
         this._body.addShape(shapeZ, new CANNON.Vec3(0, 0, 0 - (size.z / 2) - (thickness / 2)));
-        world.addBody(this._body);
 
         // 外観を生成
         this._mesh = new THREE.Mesh(
@@ -150,7 +151,7 @@ class SymbolModel extends ViewModel {
                 envMap: null,           // テクスチャ
                 refractionRatio: 0.98,  // 屈折率
                 reflectivity: 0.1,        // 映り込み
-                transparent: true, opacity: 0.8,    // 透明度
+                transparent: true, opacity: isFile ? 0.5 : 0.8,    // 透明度
                 //emissive:0x000000, //影色
                 //shininess:100, //光沢度合い（～100）
                 //specular:0x696969 //光沢部の色
@@ -158,7 +159,6 @@ class SymbolModel extends ViewModel {
         );
         this._mesh.receiveShadow = true;
         this._mesh.castShadow = true;
-        scene.add(this._mesh);
     }
     public copy(): void {
         this._mesh.position.set(this._body.position.x, this._body.position.y, this._body.position.z);
@@ -195,6 +195,12 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
 	 */
     constructor(canvas: HTMLCanvasElement, width: number, height: number) {
         super();
+        // WebGPU をサポートしているか確認
+        if (! (('gpu' in navigator) && (navigator.gpu))) {
+            this.dispatchEvent({ type: 'debugLog', message: `WebGPU is not supported in this browser. Please use a browser with WebGPU support.`});
+        }
+
+        this.dispatchEvent({ type: 'debugLog', message: `constructor` });
 
         // 描画機を作成
         const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
@@ -210,7 +216,9 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         // 空間を作成
         this._scene = new THREE.Scene();
         // 地面を追加
-        this._ground = new GroundModel(this._world, this._scene, new Distance(5000, 10, 5000), new THREE.Color('lightgreen'), 10);
+        this._ground = new GroundModel(new Distance(5000, 10, 5000), new THREE.Color('lightgreen'), 10);
+        this._world.addBody(this._ground._body);
+        this._scene.add(this._ground._mesh);
         // カメラの生成
         this._camera = new THREE.PerspectiveCamera(45, width / height, 0.1, this._ground.size.x);
 
@@ -229,7 +237,9 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
                 new Quaternion(this._camera.quaternion.x, this._camera.quaternion.y, this._camera.quaternion.z, this._camera.quaternion.w)
                 ) });
         });
-        this._controls.addEventListener('debug', (event) => { this.dispatchEvent({ type: 'debugLog', message: event.message }); });
+        this._controls.addEventListener('debug', (event) => {
+            this.dispatchEvent({ type: 'debugLog', message: event.message });
+        });
     }
 
 	/** @function 破棄 */
@@ -300,7 +310,7 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
 
     /** 行数から立方体の大きさを求める 1行=1mm */
     private _cubeSizeByLineCount(lineCount: number): Distance {
-        const cm = lineCount / 10;
+        const cm = Math.cbrt(lineCount / 10);
         return new Distance(cm, cm, cm);
     }
 
@@ -328,24 +338,21 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
             const axes = new THREE.AxesHelper();
 
             const force = 1_000_000_000; //1_000_000;//10 * 1000 * 1000 * 1000 * 1000;   // 剛性(変形し易さ) 0-1_000_000_000
-            const ancorRadius = 10;
 
             // オブジェクトのサンプルを生成
-            //this._createObjectSample(force, ancorRadius);
+            this._createObjectSample(force, 10);
 
             // ファイル赤球を生成
-            const fileSize = this._cubeSizeByLineCount(this._symbol.lineCount);
-            let currentY = fileSize.y * 3.5;
-            let previousBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(0, currentY, 0) });
-            let previousSize = new Distance(0, 0, 0);
-            const filerMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(ancorRadius),
-                new THREE.MeshPhongMaterial({ color: 'red', transparent: true, opacity: 0.5 })
-            );
-            filerMesh.position.set(0, currentY, 0);
-            this._scene.add(filerMesh);
-            currentY -= ancorRadius + (ancorRadius / 4);
-            this._symbolsBox.expandByObject(filerMesh);
+            const mm = this._symbol.lineCount / 10;
+            const fileSize = new Distance(mm, mm, mm);// this._cubeSizeByLineCount(this._symbol.lineCount);
+            const ancorRadius = fileSize.y;
+            let currentY = ancorRadius * 5;
+            let previousModel = new SymbolModel(this._symbol, fileSize, new Location(0, currentY, 0), 'red');
+            this._world.addBody(previousModel._body);
+            this._scene.add(previousModel._mesh);
+            this._objects.push(previousModel);
+            this._symbolsBox.expandByObject(previousModel._mesh);
+            currentY -= ancorRadius;
 
             // シンボル木を生成
             this.dispatchEvent({ type: 'debugLog', message: `showSymbolTree(BEGIN)` });
@@ -357,7 +364,9 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
                 const size = this._cubeSizeByLineCount(child.lineCount < 1 ? 1 : child.lineCount);
                 const position = new Location(0, currentY - (size.y / 2), 0);
                 const color = this._convertSymbolKindToColor(child.kind);
-                const cube = new SymbolModel(this._world, this._scene, child, size, position, color);
+                const cube = new SymbolModel(child, size, position, color);
+                this._world.addBody(cube._body);
+                this._scene.add(cube._mesh);
                 this._objects.push(cube);
                 this._symbolsBox.expandByObject(cube._mesh);
 
@@ -369,10 +378,10 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
                 this._world.addContactMaterial(contactMaterial);
 
                 // 前のシンボル箱とバネで繋ぐ
-                const contactSpling = new CANNON.Spring(cube._body, previousBody, {
+                const contactSpling = new CANNON.Spring(cube._body, previousModel._body, {
                     localAnchorA: new CANNON.Vec3(0, 0 + (size.y / 2), 0), // ボディAのアンカー（接続点）
-                    localAnchorB: new CANNON.Vec3(0, 0 - (previousSize.y / 2), 0), // ボディBのアンカー（接続点）
-                    restLength: previousBody.position.y - cube._body.position.y, // 自然長（何も力が加わっていないときのスプリングの長さ）
+                    localAnchorB: new CANNON.Vec3(0, 0 - (previousModel.size.y / 2), 0), // ボディBのアンカー（接続点）
+                    restLength: previousModel.position.y - cube._body.position.y, // 自然長（何も力が加わっていないときのスプリングの長さ）
                     stiffness:  100,    // スプリングの剛性(硬さ) 100:柔らかい-1000:硬い
                     damping: 1,         // 減衰係数(振動がどのくらい早く減少するか) 0:遅い-1:早い
                 });
@@ -382,8 +391,7 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
                 });
 
                 // 前のシンボル箱を更新
-                previousBody = cube._body;
-                previousSize = new Distance(size.x, size.y, size.z);
+                previousModel = cube;
                 currentY -= size.y + (size.y / 4);
             }
             this._symbolTreeIsMaking = false;
@@ -418,7 +426,9 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         // 1つ目のシンボルを生成
         const symbolFirst = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'first', '', 0, 80 - 1);
         const sizeFirst = this._cubeSizeByLineCount(symbolFirst.lineCount < 50 ? 50 : symbolFirst.lineCount);
-        const cubeFirst = new SymbolModel(this._world, this._scene, symbolFirst, sizeFirst, new Location(500, 250, 0), 'gray');
+        const cubeFirst = new SymbolModel(symbolFirst, sizeFirst, new Location(500, 250, 0), 'gray');
+        this._world.addBody(cubeFirst._body);
+        this._scene.add(cubeFirst._mesh);
         this._objects.push(cubeFirst);
         /*const constraintFirst = new CANNON.PointToPointConstraint(
             ancorBody,          new CANNON.Vec3(0, -(ancorRadius + (ancorRadius / 1)), 0),            // ワールド座標の接続点
@@ -433,11 +443,15 @@ export class View extends THREE.EventDispatcher<ViewEventMap> {
         const symbolSecond = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'second', '', 80, 80 + 500 - 1);
         const sizeSecond = this._cubeSizeByLineCount(symbolSecond.lineCount < 50 ? 50 : symbolSecond.lineCount);
         const positionSecond = new Location(500, 200, 0);
-        const cubeSecond = new SymbolModel(this._world, this._scene, symbolSecond, sizeSecond, positionSecond, 'gray');
+        const cubeSecond = new SymbolModel(symbolSecond, sizeSecond, positionSecond, 'gray');
+        this._world.addBody(cubeSecond._body);
+        this._scene.add(cubeSecond._mesh);
         this._objects.push(cubeSecond);
         const symbolInner = new SYMBOL.Symbol(SYMBOL.SymbolKind.Function, 'inner', '', 80 + 500, (80 + 500) + 200 - 1);
         const sizeInner = this._cubeSizeByLineCount(symbolInner.lineCount < 50 ? 50 : symbolInner.lineCount);
-        const cubeInner = new SymbolModel(this._world, this._scene, symbolInner, sizeInner, positionSecond, 'red');
+        const cubeInner = new SymbolModel(symbolInner, sizeInner, positionSecond, 'red');
+        this._world.addBody(cubeInner._body);
+        this._scene.add(cubeInner._mesh);
         this._objects.push(cubeInner);
         /*const constraintSecond = new CANNON.PointToPointConstraint(
             cubeFirst._body,    new CANNON.Vec3(0, -((cubeFirst.size.y / 2) + (cubeFirst.size.y / 2)), 0), // ワールド座標の接続点
