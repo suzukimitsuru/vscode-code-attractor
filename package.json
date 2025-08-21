@@ -3,7 +3,7 @@
   "displayName": "Code Attractor",
   "shortName": "Attractor",
   "description": "I wish to make a attracting foce diagram of the relationship between chords",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "preview": true,
   "publisher": "suzukimitsuru",
   "keywords": [
@@ -109,5 +109,8 @@
     "three": ">=0.162.0",
     "vscode-languageclient": ">=9.0.1",
     "xml2js": ">=0.6.2"
+  },
+  "overrides": {
+    "tar-fs": ">=2.1.3"
   }
 }

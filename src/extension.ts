@@ -7,7 +7,7 @@ import * as editor from './editor';
 import * as codefiles from './codeFiles';
 import { resolve } from 'path';
 
-const packageJson = vscode.extensions.getExtension('suzukimitsrugunmajapan.code-attractor')?.packageJSON;
+const packageJson = vscode.extensions.getExtension('suzukimitsuru.code-attractor')?.packageJSON;
 const logs = vscode.window.createOutputChannel(packageJson.displayName, { log: true});
 const statusbar = new status.StatusBar(packageJson.displayName, 'codeattractor.openEditor');
 
